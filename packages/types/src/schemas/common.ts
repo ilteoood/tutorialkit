@@ -268,6 +268,17 @@ export const webcontainerSchema = commandsSchema.extend({
     .describe(
       'Display a link in lesson for editing the page content. The value is a URL pattern where `${path}` is replaced with the lesson’s location relative to `src/content/tutorial`.',
     ),
+  downloadAsZip: z
+    .union([
+      // `false` for disabling the button
+      z.boolean(),
+
+      z.strictObject({
+        filename: z.string(),
+      }),
+    ])
+    .optional()
+    .describe('Display a button for downloading the current lesson as `.zip` file.'),
 });
 
 export const baseSchema = webcontainerSchema.extend({

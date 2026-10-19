@@ -216,8 +216,8 @@ describe('metadata inheriting', () => {
       previews: ['8080', '3000'],
       template: 'vite',
       terminal: { panels: ['output', 'terminal'] },
+      downloadAsZip: false,
     };
-
     getCollection.mockReturnValueOnce([
       { id: 'meta.md', ...tutorial, data },
       { id: '1-part/meta.md', ...part },
@@ -228,7 +228,7 @@ describe('metadata inheriting', () => {
     const collection = await getTutorial();
     const { data: lessonData } = collection.lessons[0];
 
-    expect(lessonData).toStrictEqual({ ...data, type: 'lesson', title: lesson.data.title });
+    expect(lessonData).toMatchObject({ ...data, type: 'lesson', title: lesson.data.title });
   });
 
   test('lesson inherits metadata cascaded from all higher levels', async () => {

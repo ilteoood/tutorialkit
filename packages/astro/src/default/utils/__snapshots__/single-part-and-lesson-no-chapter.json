@@ -19,7 +19,8 @@
         "template": "default",
         "i18n": {
           "mocked": "default localization"
-        }
+        },
+        "downloadAsZip": false
       },
       "id": "1-lesson",
       "filepath": "1-part/1-lesson/content.md",

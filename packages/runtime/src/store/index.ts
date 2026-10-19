@@ -6,6 +6,7 @@ import { newTask, type Task } from '../tasks.js';
 import type { EditorConfig } from '../webcontainer/editor-config.js';
 import { bootStatus, unblockBoot, type BootStatus } from '../webcontainer/on-demand-boot.js';
 import type { PreviewInfo } from '../webcontainer/preview-info.js';
+import { exportSnapshotAsZip } from '../webcontainer/snapshot-zip.js';
 import { StepsController } from '../webcontainer/steps.js';
 import type { TerminalConfig } from '../webcontainer/terminal-config.js';
 import { EditorStore, type EditorDocument, type EditorDocuments, type ScrollPosition } from './editor.js';
@@ -406,5 +407,10 @@ export class TutorialStore {
   /** Take snapshot of the current state of the lesson */
   takeSnapshot() {
     return this._runner.takeSnapshot();
+  }
+
+  /** Download the current lesson workspace as a zip (byte) blob. */
+  async exportSnapshotAsZip(): Promise<Uint8Array> {
+    return exportSnapshotAsZip(await this._pod);
   }
 }

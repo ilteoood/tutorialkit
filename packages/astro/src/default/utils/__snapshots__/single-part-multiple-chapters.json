@@ -47,7 +47,8 @@
         "template": "default",
         "i18n": {
           "mocked": "default localization"
-        }
+        },
+        "downloadAsZip": false
       },
       "id": "1-first",
       "filepath": "1-part/1-chapter/1-first/content.md",
@@ -82,7 +83,8 @@
         "template": "default",
         "i18n": {
           "mocked": "default localization"
-        }
+        },
+        "downloadAsZip": false
       },
       "id": "1-second",
       "filepath": "1-part/2-chapter/1-second/content.md",
@@ -121,7 +123,8 @@
         "template": "default",
         "i18n": {
           "mocked": "default localization"
-        }
+        },
+        "downloadAsZip": false
       },
       "id": "1-third",
       "filepath": "1-part/3-chapter/1-third/content.md",
