@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { areFilesEqual, diffFiles, toFileTree } from './files.js';
+import path from 'node:path';
+import { describe, it, expect, vi } from 'vitest';
+import { areFilesEqual, diffFiles, writeFilesToPod } from './files.js';
 
 describe('areFilesEqual', () => {
   it('should return true if files are equal', () => {
@@ -70,24 +71,33 @@ describe('diffFiles', () => {
   });
 });
 
-describe('toFileTree', () => {
-  it('should convert files to a file system tree', () => {
-    const files = {
+describe('writeFilesToPod', () => {
+  it('creates directories recursively then writes all files', async () => {
+    const mkdir = vi.fn(async () => undefined);
+    const writeFile = vi.fn(async () => undefined);
+
+    await writeFilesToPod({ fs: { mkdir, writeFile } } as never, {
       '/a.js': 'a content',
       '/b.md': 'b content',
-      '/dir/bar': 'bar content',
-    };
-
-    const tree = toFileTree(files);
-
-    expect(tree).toEqual({
-      'a.js': { file: { contents: 'a content' } },
-      'b.md': { file: { contents: 'b content' } },
-      dir: {
-        directory: {
-          bar: { file: { contents: 'bar content' } },
-        },
-      },
+      '/dir/c.js': 'c content',
+      '/dir/sub/d.js': 'd content',
     });
+
+    expect(mkdir).toHaveBeenCalledWith('/dir', { recursive: true });
+    expect(mkdir).toHaveBeenCalledWith(path.join('/dir', 'sub'), { recursive: true });
+    expect(writeFile).toHaveBeenCalledWith('/a.js', 'a content');
+    expect(writeFile).toHaveBeenCalledWith('/b.md', 'b content');
+    expect(writeFile).toHaveBeenCalledWith('/dir/c.js', 'c content');
+    expect(writeFile).toHaveBeenCalledWith('/dir/sub/d.js', 'd content');
+  });
+
+  it('skips directory creation when no nested files exist', async () => {
+    const mkdir = vi.fn(async () => undefined);
+    const writeFile = vi.fn(async () => undefined);
+
+    await writeFilesToPod({ fs: { mkdir, writeFile } } as never, { '/a.js': 'a content' });
+
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledWith('/a.js', 'a content');
   });
 });

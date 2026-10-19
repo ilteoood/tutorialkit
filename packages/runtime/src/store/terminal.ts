@@ -1,25 +1,38 @@
+import type { Nodepod, NodepodTerminal, TerminalOptions as NodepodTerminalOptions } from '@r1ck404/nodepod';
 import type { TerminalSchema } from '@tutorialkit/types';
-import { WebContainer, auth } from '@webcontainer/api';
 import { atom } from 'nanostores';
 import { tick } from '../utils/promises.js';
-import { isWebContainerSupported } from '../utils/support.js';
-import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
-import { newJSHProcess } from '../webcontainer/shell.js';
+import { isPodSupported } from '../utils/support.js';
+import { escapeCodes, type ITerminal } from '../utils/terminal.js';
 import { TerminalConfig, TerminalPanel } from '../webcontainer/terminal-config.js';
+
+interface TerminalWiringOptions {
+  Terminal: NodepodTerminalOptions['Terminal'];
+  FitAddon?: NodepodTerminalOptions['FitAddon'];
+  WebglAddon?: NodepodTerminalOptions['WebglAddon'];
+  SerializeAddon?: NodepodTerminalOptions['SerializeAddon'];
+  theme: NonNullable<NodepodTerminalOptions['theme']>;
+  fontFamily?: string;
+  fontSize?: number;
+}
 
 export class TerminalStore {
   terminalConfig = atom<TerminalConfig>(new TerminalConfig());
 
   private _output: ITerminal | undefined = undefined;
-  private _webcontainerLoaded = false;
+  private _podReady = false;
+  private _terminals = new Map<string, { terminal: NodepodTerminal; element: HTMLElement }>();
+  private _bootElements = new Map<string, HTMLElement>();
 
-  constructor(
-    private _webcontainer: Promise<WebContainer>,
-    private _useAuth: boolean,
-  ) {
-    this._webcontainer.then(() => {
-      this._webcontainerLoaded = true;
-    });
+  constructor(private _pod: Promise<Nodepod>) {
+    this._pod.then(
+      () => {
+        this._podReady = true;
+      },
+      () => {
+        this._podReady = true;
+      },
+    );
   }
 
   getOutputPanel(): ITerminal | undefined {
@@ -34,38 +47,31 @@ export class TerminalStore {
     const oldTerminalConfig = this.terminalConfig.get();
     const newTerminalConfig = new TerminalConfig(config);
 
-    // iterate over the old terminal config and make a list of all terminal panels
     const panelMap = new Map<string, TerminalPanel>(oldTerminalConfig.panels.map((panel) => [panel.id, panel]));
 
-    // iterate over the new terminal panels and try to re-use the old terminal with the new panel
     for (const panel of newTerminalConfig.panels) {
       const oldPanel = panelMap.get(panel.id);
 
       panelMap.delete(panel.id);
 
-      if (oldPanel?.terminal) {
-        // if we found a previous panel with the same id, attach that terminal to the new panel
-        panel.attachTerminal(oldPanel.terminal);
+      if (oldPanel?.nodeTerminal) {
+        panel.attachNodeTerminal(oldPanel.nodeTerminal);
       }
 
       if (panel.type === 'output') {
         this._output = panel;
       }
-
-      if (panel.type === 'terminal' && !oldPanel) {
-        // if the panel is a terminal panel, and this panel didn't exist before, spawn a new JSH process
-        this._bootWebContainer(panel)
-          .then(async (webcontainerInstance) => {
-            panel.attachProcess(await newJSHProcess(webcontainerInstance, panel, panel.processOptions));
-          })
-          .catch(() => {
-            // do nothing
-          });
-      }
     }
 
-    // kill all old processes which we couldn't re-use
     for (const panel of panelMap.values()) {
+      const held = this._terminals.get(panel.id);
+
+      if (held) {
+        held.terminal.detach();
+        this._terminals.delete(panel.id);
+      }
+
+      this._bootElements.delete(panel.id);
       panel.process?.kill();
     }
 
@@ -73,90 +79,118 @@ export class TerminalStore {
   }
 
   /**
-   * Attaches the provided terminal with the panel matching the provided ID.
-   *
-   * @param id The ID of the panel to attach the terminal with.
-   * @param terminal The terminal to hook up to the JSH process.
+   * Wire a Nodepod-driven interactive terminal panel to a host-managed DOM
+   * element. Boot status is rendered as plain text into the same element,
+   * and replaced once the NodepodTerminal owns it.
    */
-  async attachTerminal(id: string, terminal: ITerminal) {
+  async attachTerminal(id: string, element: HTMLElement, options: TerminalWiringOptions) {
     const panel = this.terminalConfig.get().panels.find((panel) => panel.id === id);
 
-    if (!panel) {
-      // if we don't have a panel with the provided id, just exit
+    if (!panel || panel.type !== 'terminal') {
       return;
     }
 
-    panel.attachTerminal(terminal);
-  }
-
-  onTerminalResize(cols: number, rows: number) {
-    // iterate over all terminal panels and resize all processes
-    for (const panel of this.terminalConfig.get().panels) {
-      panel.process?.resize({ cols, rows });
-    }
-  }
-
-  private async _bootWebContainer(terminal: ITerminal) {
-    validateWebContainerSupported(terminal);
-
-    const isLoaded = this._webcontainerLoaded;
-
-    if (this._useAuth && !isLoaded) {
-      terminal.write('Waiting for authentication to complete...');
-
-      await auth.loggedIn();
-
-      clearTerminal(terminal);
+    if (!isPodSupported()) {
+      this._renderBootstrapMessage(element, browserSupportMessage);
+      return;
     }
 
-    if (!isLoaded) {
-      terminal.write('Booting WebContainer...');
+    this._bootElements.set(id, element);
+
+    if (!this._podReady) {
+      this._renderBootstrapMessage(element, 'Booting runtime...');
     }
 
     try {
-      const webcontainerInstance = await this._webcontainer;
+      const pod = await this._pod;
 
-      if (!isLoaded) {
-        clearTerminal(terminal);
+      const existing = this._terminals.get(id);
+      const bootElement = this._bootElements.get(id);
+
+      if (!bootElement) {
+        return;
       }
 
-      return webcontainerInstance;
-    } catch (error) {
-      clearTerminal(terminal);
+      if (!existing) {
+        const nodeTerminal = pod.createTerminal({
+          Terminal: options.Terminal,
+          FitAddon: options.FitAddon,
+          WebglAddon: options.WebglAddon,
+          SerializeAddon: options.SerializeAddon,
+          theme: options.theme,
+          fontFamily: options.fontFamily,
+          fontSize: options.fontSize,
+          shell:
+            panel.processOptions?.allowRedirects || panel.processOptions?.allowCommands
+              ? {
+                  allowRedirects: !!panel.processOptions?.allowRedirects,
+                  allowCommands: panel.processOptions?.allowCommands,
+                }
+              : undefined,
+        });
 
-      await tick();
+        nodeTerminal.attach(bootElement);
+        nodeTerminal.fit();
 
-      terminal.write(
+        panel.attachNodeTerminal(nodeTerminal);
+
+        this._terminals.set(id, { terminal: nodeTerminal, element: bootElement });
+      } else {
+        existing.terminal.detach();
+        existing.terminal.attach(bootElement);
+        panel.attachNodeTerminal(existing.terminal);
+
+        this._terminals.set(id, { terminal: existing.terminal, element: bootElement });
+      }
+
+      this._bootElements.delete(id);
+    } catch {
+      this._renderBootstrapMessage(
+        element,
         [
-          escapeCodes.red(`Looks like your browser's configuration is blocking WebContainers.`),
+          escapeCodes.red(`Looks like your browser's configuration is blocking the runtime.`),
           '',
           `Let's troubleshoot this!`,
           '',
-          'Read more at:',
-          'https://webcontainers.io/guides/browser-config',
+          'See https://r1ck404.github.io/Nodepod/docs/concepts/compatibility/ for browser requirements.',
           '',
         ].join('\n'),
       );
 
-      throw error;
+      await tick();
     }
   }
-}
 
-function validateWebContainerSupported(terminal: ITerminal) {
-  if (!isWebContainerSupported()) {
-    terminal.write(
-      [
-        escapeCodes.red('Incompatible Web Browser'),
-        '',
-        `WebContainers currently work in Chromium-based browsers, Firefox, and Safari 16.4. We're hoping to add support for more browsers as they implement the necessary Web Platform features.`,
-        '',
-        'Read more about browser support:',
-        'https://webcontainers.io/guides/browser-support',
-        '',
-      ].join('\n'),
-    );
+  onTerminalResize(cols: number, rows: number) {
+    for (const { terminal } of this._terminals.values()) {
+      terminal.fit();
+    }
 
-    throw new Error('Incompatible Web Browser');
+    for (const panel of this.terminalConfig.get().panels) {
+      panel.process?.resize(cols, rows);
+    }
+  }
+
+  private _renderBootstrapMessage(element: HTMLElement, message: string) {
+    element.replaceChildren();
+
+    const pre = document.createElement('pre');
+
+    pre.style.margin = '0';
+    pre.style.padding = '0.5rem';
+    pre.style.fontFamily = 'Menlo, courier-new, courier, monospace';
+    pre.style.fontSize = '13px';
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.style.color = 'inherit';
+    pre.textContent = message;
+
+    element.appendChild(pre);
   }
 }
+
+const browserSupportMessage = [
+  escapeCodes.red('Incompatible Web Browser'),
+  '',
+  `Nodepod requires a cross-origin isolated browser with SharedArrayBuffer. See https://r1ck404.github.io/Nodepod/docs/concepts/compatibility/ for the current list of supported browsers.`,
+  '',
+].join('\n');

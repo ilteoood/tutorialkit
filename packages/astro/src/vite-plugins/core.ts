@@ -1,17 +1,17 @@
 /**
- * A plugin that let users write components that can access the internals
+ * A plugin that lets users write components that can access the internals
  * of TutorialKit.
  *
  * The virtual module can be imported as:
  *
  * ```ts
- * import { webcontainer } from 'tutorialkit:core';
+ * import { pod } from 'tutorialkit:core';
  *
  * export const MyComponent = () => {
  *   useEffect(() => {
  *     (async () => {
- *       const webcontainerInstance = await webcontainer;
- *       await webcontainerInstance.fs.writeFile('foo.js', 'console.log("hello world")');
+ *       const podInstance = await pod;
+ *       await podInstance.fs.writeFile('foo.js', 'console.log("hello world")');
  *     })();
  *   }, []);
  *
@@ -39,10 +39,10 @@ export const tutorialkitCore: VitePlugin = {
   },
   async load(id) {
     if (id === resolvedVirtualModuleId) {
-      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/webcontainer.ts'));
+      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/pod.ts'));
 
       return `
-        export { webcontainer } from '${pathToInit}';
+        export { pod } from '${pathToInit}';
       `;
     }
 

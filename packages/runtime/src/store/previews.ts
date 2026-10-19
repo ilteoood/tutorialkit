@@ -1,60 +1,65 @@
+import type { Nodepod } from '@r1ck404/nodepod';
 import type { PreviewSchema } from '@tutorialkit/types';
-import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
 import { PortInfo } from '../webcontainer/port-info.js';
 import { PreviewInfo } from '../webcontainer/preview-info.js';
+
+type ServerReadyListener = (port: number, url: string) => void;
 
 export class PreviewsStore {
   private _availablePreviews = new Map<number, PortInfo>();
   private _previewsLayout: PreviewInfo[] = [];
 
-  /**
-   * Atom representing the current previews. If it's an empty array or none of
-   * the previews are ready, then no preview can be shown.
-   */
   previews = atom<PreviewInfo[]>([]);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this._init(webcontainerPromise);
+  constructor(podPromise: Promise<Nodepod>) {
+    this._subscribe(podPromise);
   }
 
-  private async _init(webcontainerPromise: Promise<WebContainer>) {
-    const webcontainer = await webcontainerPromise;
+  private async _subscribe(podPromise: Promise<Nodepod>) {
+    const pod = await podPromise;
 
-    webcontainer.on('port', (port, type, url) => {
+    const listener: ServerReadyListener = (port, url) => {
       let portInfo = this._availablePreviews.get(port);
 
       if (!portInfo) {
-        portInfo = new PortInfo(port, url, type === 'open');
+        portInfo = new PortInfo(port, url, true);
 
         this._availablePreviews.set(port, portInfo);
       }
 
-      portInfo.ready = type === 'open';
+      portInfo.ready = true;
       portInfo.origin = url;
 
       if (this._previewsLayout.length === 0) {
-        this.previews.set([new PreviewInfo({}, portInfo)]);
-      } else {
-        this._previewsLayout = [...this._previewsLayout];
+        const previewInfo = new PreviewInfo({}, portInfo);
+
+        this._previewsLayout = [previewInfo];
         this.previews.set(this._previewsLayout);
+
+        return;
       }
-    });
+
+      this._previewsLayout = this._previewsLayout.map((preview) => {
+        if (preview.port !== port) {
+          return preview;
+        }
+
+        return new PreviewInfo({ title: preview.title, pathname: preview.pathname }, portInfo!);
+      });
+      this.previews.set(this._previewsLayout);
+    };
+
+    pod.proxy.on('server-ready', listener);
   }
 
-  /**
-   * Set the expected port for the preview to show. If this is not set,
-   * the port of the first server that is ready will be used.
-   */
   setPreviews(config: PreviewSchema) {
     if (config === false) {
-      // clear the previews if they are turned off
       this.previews.set([]);
 
       return;
     }
 
-    // if the schema is `true`, we just use the default empty array
     const previews = config === true ? [] : (config ?? []);
 
     const previewInfos = previews.map((previewConfig) => {
@@ -87,10 +92,6 @@ export class PreviewsStore {
 
     this._previewsLayout = previewInfos;
 
-    /**
-     * If a port is provided and the preview is already ready we update the previewUrl.
-     * If no port is provided we default to the first preview ever to ready if there are any.
-     */
     if (previews.length === 0) {
       const firstPreview = this._availablePreviews.values().next().value as PreviewInfo | undefined;
 

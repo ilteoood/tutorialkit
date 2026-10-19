@@ -16,14 +16,14 @@ export const i18nSchema = z.object({
   editPageText: z.string().optional().describe('Text of the edit page link.'),
 
   /**
-   * Text of the WebContainer link.
+   * Text of the runtime link.
    *
-   * @default 'Powered by WebContainers'
+   * @default 'Powered by Nodepod'
    */
-  webcontainerLinkText: z.string().optional().describe('Text of the WebContainer link.'),
+  webcontainerLinkText: z.string().optional().describe('Text of the runtime link.'),
 
   /**
-   * Text shown on the call to action button to start webcontainer when boot was blocked
+   * Text shown on the call to action button to start the runtime when boot was blocked
    * due to memory restrictions.
    *
    * @default 'Start WebContainer'
@@ -32,7 +32,7 @@ export const i18nSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Text shown on the call to action button to start webcontainer when boot was blocked due to memory restrictions.',
+      'Text shown on the call to action button to start the runtime when boot was blocked due to memory restrictions.',
     ),
 
   /**

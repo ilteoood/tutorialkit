@@ -1,9 +1,8 @@
+import type { Nodepod, TerminalOptions as NodepodTerminalOptions } from '@r1ck404/nodepod';
 import type { FileDescriptor, Files, FilesystemError, Lesson } from '@tutorialkit/types';
-import type { WebContainer } from '@webcontainer/api';
 import { atom, type ReadableAtom } from 'nanostores';
 import { LessonFilesFetcher } from '../lesson-files.js';
 import { newTask, type Task } from '../tasks.js';
-import type { ITerminal } from '../utils/terminal.js';
 import type { EditorConfig } from '../webcontainer/editor-config.js';
 import { bootStatus, unblockBoot, type BootStatus } from '../webcontainer/on-demand-boot.js';
 import type { PreviewInfo } from '../webcontainer/preview-info.js';
@@ -14,22 +13,23 @@ import { PreviewsStore } from './previews.js';
 import { TerminalStore } from './terminal.js';
 import { TutorialRunner } from './tutorial-runner.js';
 
+export interface TerminalWiringOptions {
+  Terminal: NodepodTerminalOptions['Terminal'];
+  FitAddon?: NodepodTerminalOptions['FitAddon'];
+  WebglAddon?: NodepodTerminalOptions['WebglAddon'];
+  SerializeAddon?: NodepodTerminalOptions['SerializeAddon'];
+  theme: NonNullable<NodepodTerminalOptions['theme']>;
+  fontFamily?: string;
+  fontSize?: number;
+}
+
 interface StoreOptions {
-  webcontainer: Promise<WebContainer>;
-
-  /**
-   * Whether or not authentication is used for the WebContainer API.
-   */
-  useAuth: boolean;
-
-  /**
-   * The base path to use when fetching files.
-   */
+  pod: Promise<Nodepod>;
   basePathname?: string;
 }
 
 export class TutorialStore {
-  private _webcontainer: Promise<WebContainer>;
+  private _pod: Promise<Nodepod>;
 
   private _runner: TutorialRunner;
   private _previewsStore: PreviewsStore;
@@ -47,25 +47,16 @@ export class TutorialStore {
   private _lessonSolution: Files | undefined;
   private _lessonTemplate: Files | undefined;
 
-  /**
-   * Whether or not the current lesson is fully loaded in WebContainer
-   * and in every stores.
-   */
   readonly lessonFullyLoaded = atom<boolean>(false);
 
-  constructor({ useAuth, webcontainer, basePathname }: StoreOptions) {
-    this._webcontainer = webcontainer;
+  constructor({ pod, basePathname }: StoreOptions) {
+    this._pod = pod;
     this._editorStore = new EditorStore();
     this._lessonFilesFetcher = new LessonFilesFetcher(basePathname);
-    this._previewsStore = new PreviewsStore(this._webcontainer);
-    this._terminalStore = new TerminalStore(this._webcontainer, useAuth);
-    this._runner = new TutorialRunner(this._webcontainer, this._terminalStore, this._editorStore, this._stepController);
+    this._previewsStore = new PreviewsStore(this._pod);
+    this._terminalStore = new TerminalStore(this._pod);
+    this._runner = new TutorialRunner(this._pod, this._terminalStore, this._editorStore, this._stepController);
 
-    /**
-     * By having this code under `import.meta.hot`, it gets:
-     *  - ignored on server side where it shouldn't run
-     *  - discarded when doing a production build
-     */
     if (import.meta.hot) {
       import.meta.hot.on('tk:refresh-wc-files', async (hotFilesRefs: string[]) => {
         let shouldUpdate = false;
@@ -151,7 +142,7 @@ export class TutorialStore {
       return;
     }
 
-    this._runner.setWatchFromWebContainer(lesson.data.filesystem?.watch ?? false);
+    this._runner.setWatchFromPod(lesson.data.filesystem?.watch ?? false);
 
     this._lessonTask = newTask(
       async (signal) => {
@@ -212,7 +203,7 @@ export class TutorialStore {
     return this._editorStore.currentDocument;
   }
 
-  /** Status of the webcontainer's booting */
+  /** Status of the runtime's booting */
   get bootStatus(): ReadableAtom<BootStatus> {
     return bootStatus;
   }
@@ -295,7 +286,7 @@ export class TutorialStore {
     return !!this._lesson && Object.keys(this._lesson.solution[1]).length >= 1;
   }
 
-  /** Unlock webcontainer's boot process if it was in `'blocked'` state */
+  /** Unlock pod's boot process if it was in `'blocked'` state */
   unblockBoot() {
     unblockBoot();
   }
@@ -333,10 +324,8 @@ export class TutorialStore {
 
   /** Add new file to file tree */
   async addFile(filePath: string): Promise<void> {
-    // always select the existing or newly created file
     this.setSelectedFile(filePath);
 
-    // prevent creating duplicates
     if (this._editorStore.files.get().find((file) => file.path === filePath)) {
       return;
     }
@@ -351,7 +340,6 @@ export class TutorialStore {
 
   /** Add new folder to file tree */
   async addFolder(folderPath: string) {
-    // prevent creating duplicates
     if (this._editorStore.files.get().some((file) => file.path.startsWith(folderPath))) {
       return;
     }
@@ -398,8 +386,8 @@ export class TutorialStore {
   }
 
   /** @internal */
-  attachTerminal(id: string, terminal: ITerminal) {
-    this._terminalStore.attachTerminal(id, terminal);
+  attachTerminal(id: string, element: HTMLElement, options: TerminalWiringOptions) {
+    void this._terminalStore.attachTerminal(id, element, options);
   }
 
   /** Callback that should be called when terminal resizes */

@@ -19,15 +19,7 @@ interface PackageJson {
 
 const TUTORIALKIT_VERSION = pkg.version;
 
-const REQUIRED_DEPENDENCIES = [
-  '@tutorialkit/runtime',
-  '@webcontainer/api',
-  'nanostores',
-  '@nanostores/react',
-  'kleur',
-  '@stackblitz/sdk',
-  'fast-glob',
-];
+const REQUIRED_DEPENDENCIES = ['@tutorialkit/runtime', '@r1ck404/nodepod', 'nanostores', '@nanostores/react', 'kleur'];
 
 export function ejectRoutes(flags: Arguments) {
   if (flags._[1] === 'help' || flags.help || flags.h) {

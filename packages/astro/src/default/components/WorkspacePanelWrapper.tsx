@@ -4,7 +4,7 @@ import type { Lesson } from '@tutorialkit/types';
 import { useEffect } from 'react';
 import { Dialog } from 'tutorialkit:override-components';
 import { themeStore } from '../stores/theme-store.js';
-import { tutorialStore } from './webcontainer.js';
+import { tutorialStore } from './pod.js';
 
 interface Props {
   lesson: Lesson;

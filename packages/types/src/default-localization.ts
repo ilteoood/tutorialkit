@@ -5,7 +5,7 @@ export const DEFAULT_LOCALIZATION = {
   noPreviewNorStepsText: 'No preview to run nor steps to show',
   startWebContainerText: 'Run this tutorial',
   editPageText: 'Edit this page',
-  webcontainerLinkText: 'Powered by WebContainers',
+  webcontainerLinkText: 'Powered by Nodepod',
   filesTitleText: 'Files',
   fileTreeCreateFileText: 'Create file',
   fileTreeCreateFolderText: 'Create folder',

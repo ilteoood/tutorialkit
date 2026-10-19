@@ -96,8 +96,6 @@ export async function getTutorial(): Promise<Tutorial> {
         'i18n',
         'meta',
         'editPageLink',
-        'openInStackBlitz',
-        'downloadAsZip',
         'filesystem',
       ]),
     };
@@ -160,8 +158,6 @@ async function parseCollection(collection: CollectionEntryTutorial[]) {
       // default template if not specified
       tutorialMetaData.template ??= 'default';
       tutorialMetaData.i18n = Object.assign({ ...DEFAULT_LOCALIZATION }, tutorialMetaData.i18n);
-      tutorialMetaData.openInStackBlitz ??= true;
-      tutorialMetaData.downloadAsZip ??= false;
 
       tutorial.logoLink = data.logoLink;
     } else if (type === 'part') {

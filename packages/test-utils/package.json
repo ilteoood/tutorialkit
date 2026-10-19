@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@webcontainer/api": "1.5.1",
+    "@r1ck404/nodepod": "^1.11.2",
     "typescript": "^5.4.5",
     "vitest": "^3.0.5"
   }

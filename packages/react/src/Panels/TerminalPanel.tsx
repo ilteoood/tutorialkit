@@ -1,8 +1,7 @@
 import { useStore } from '@nanostores/react';
 import type { TutorialStore } from '@tutorialkit/runtime';
 import type { TerminalPanelType } from '@tutorialkit/types';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import type { TerminalRef } from '../core/Terminal/index.js';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { classNames } from '../utils/classnames.js';
 
 const Terminal = lazy(() => import('../core/Terminal/index.js'));
@@ -20,11 +19,8 @@ const ICON_MAP = new Map<TerminalPanelType, string>([
 export function TerminalPanel({ theme, tutorialStore }: TerminalPanelProps) {
   const terminalConfig = useStore(tutorialStore.terminalConfig);
 
-  const terminalRefs = useRef<Record<number, TerminalRef>>({});
-
   const [domLoaded, setDomLoaded] = useState(false);
 
-  // select the terminal tab by default
   const [tabIndex, setTabIndex] = useState(terminalConfig.activePanel);
 
   useEffect(() => {
@@ -34,14 +30,6 @@ export function TerminalPanel({ theme, tutorialStore }: TerminalPanelProps) {
   useEffect(() => {
     setTabIndex(terminalConfig.activePanel);
   }, [terminalConfig]);
-
-  useEffect(() => {
-    return tutorialStore.themeRef.subscribe(() => {
-      for (const ref of Object.values(terminalRefs.current)) {
-        ref.reloadStyles();
-      }
-    });
-  }, []);
 
   return (
     <div className="panel-container transition-theme bg-tk-elements-panel-backgroundColor text-tk-elements-panel-textColor">
@@ -95,20 +83,15 @@ export function TerminalPanel({ theme, tutorialStore }: TerminalPanelProps) {
           <Suspense>
             {terminalConfig.panels.map(({ id, type }, index) => (
               <Terminal
-                key={id}
+                key={`${id}-${theme}`}
                 role="tabpanel"
                 id={`tk-terminal-tapbanel-${index}`}
                 aria-labelledby={`tk-terminal-tab-${index}`}
                 className={tabIndex !== index ? 'hidden h-full' : 'h-full'}
+                panelId={id}
+                tutorialStore={tutorialStore}
                 theme={theme}
                 readonly={type === 'output'}
-                ref={(ref) => (terminalRefs.current[index] = ref!)}
-                onTerminalReady={(terminal) => {
-                  tutorialStore.attachTerminal(id, terminal);
-                }}
-                onTerminalResize={(cols, rows) => {
-                  tutorialStore.onTerminalResize(cols, rows);
-                }}
               />
             ))}
           </Suspense>

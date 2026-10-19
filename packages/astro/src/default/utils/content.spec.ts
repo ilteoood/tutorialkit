@@ -213,7 +213,6 @@ describe('metadata inheriting', () => {
       i18n: { confirmationText: 'example' },
       mainCommand: 'ls',
       prepareCommands: ['npm i'],
-      openInStackBlitz: { projectTitle: 'example' },
       previews: ['8080', '3000'],
       template: 'vite',
       terminal: { panels: ['output', 'terminal'] },

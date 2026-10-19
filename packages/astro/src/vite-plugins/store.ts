@@ -1,6 +1,6 @@
 /**
  * A plugin that let users write components that can interact with the tutorial
- * state, indirectly acting on the editor and WebContainer.
+ * state, indirectly acting on the editor and Nodepod.
  *
  * The virtual module can be imported as:
  *
@@ -32,7 +32,7 @@ export const tutorialkitStore: VitePlugin = {
   },
   async load(id) {
     if (id === resolvedVirtualModuleId) {
-      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/webcontainer.ts'));
+      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/pod.ts'));
 
       return `
         import { tutorialStore } from '${pathToInit}';

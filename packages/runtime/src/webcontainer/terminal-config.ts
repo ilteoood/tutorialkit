@@ -1,5 +1,4 @@
 import type { TerminalPanelType, TerminalSchema } from '@tutorialkit/types';
-import type { WebContainerProcess } from '@webcontainer/api';
 import type { ITerminal } from '../utils/terminal.js';
 
 interface NormalizedTerminalConfig {
@@ -45,8 +44,11 @@ const TERMINAL_PANEL_TITLES: Record<TerminalPanelType, string> = {
 let globalId = 0;
 
 /**
- * This class contains the state for a terminal panel. This is a panel which is attached to a process and renders
- * the process output to a screen.
+ * Per-tab state for a terminal panel. Mixed concerns:
+ *   - output panels: holds a NodepodProcess whose stdout/stderr are written
+ *     to a host-supplied terminal interface.
+ *   - terminal panels: holds a NodepodTerminal that owns its xterm instance;
+ *     the host panel just keeps a reference for resize/kill on remount.
  */
 export class TerminalPanel implements ITerminal {
   static panelCount: Record<TerminalPanelType, number> = {
@@ -65,9 +67,20 @@ export class TerminalPanel implements ITerminal {
   readonly title: string;
 
   private _terminal?: ITerminal;
-  private _process?: WebContainerProcess;
   private _data: { data: string; type: 'input' | 'echo' }[] = [];
   private _onData?: (data: string) => void;
+
+  /**
+   * Two distinct process holders: output panels keep a NodepodProcess whose
+   * streams are piped to `terminal`; terminal panels keep a NodepodTerminal
+   * that owns its own xterm and call sites use whichever is set.
+   */
+  private _process?: { kill(): void; resize(cols: number, rows: number): void };
+  private _nodeTerminal?: {
+    detach(): void;
+    fit(): void;
+    input(text: string): void;
+  };
 
   constructor(
     readonly type: TerminalPanelType,
@@ -75,11 +88,9 @@ export class TerminalPanel implements ITerminal {
   ) {
     let title = _options?.title;
 
-    // automatically infer a title if no title is provided
     if (!title) {
       title = TERMINAL_PANEL_TITLES[type];
 
-      // we keep track of all untitled panel and add an index to the title
       const count = TerminalPanel.panelCount[type];
 
       if (count > 0) {
@@ -101,6 +112,10 @@ export class TerminalPanel implements ITerminal {
     return this._process;
   }
 
+  get nodeTerminal() {
+    return this._nodeTerminal;
+  }
+
   get processOptions() {
     if (this.type === 'output') {
       return undefined;
@@ -112,9 +127,7 @@ export class TerminalPanel implements ITerminal {
     };
   }
 
-  // #region ITerminal methods
   get cols() {
-    // we fallback to a default
     return this._terminal?.cols;
   }
 
@@ -158,26 +171,36 @@ export class TerminalPanel implements ITerminal {
       this._onData = callback;
     }
   }
-  // #endregion
 
-  /**
-   * Attach a WebContainer process to this panel.
-   *
-   * @param process The WebContainer process
-   */
-  attachProcess(process: WebContainerProcess) {
+  attachProcess(process: NonNullable<TerminalPanel['process']>) {
     this._process = process;
 
     if (this.cols != null && this.rows != null) {
-      this._process.resize({ cols: this.cols, rows: this.rows });
+      this._process.resize(this.cols, this.rows);
     }
   }
 
-  /**
-   * Attach a terminal to this panel.
-   *
-   * @param terminal The terminal.
-   */
+  attachNodeTerminal(nodeTerminal: NonNullable<TerminalPanel['nodeTerminal']>) {
+    this._nodeTerminal = nodeTerminal;
+
+    for (const { type, data } of this._data) {
+      if (type === 'echo') {
+        if (this._terminal) {
+          this._terminal.write(data);
+        } else {
+          /**
+           * Re-queued if no terminal has been attached yet; covered by
+           * attachTerminal later in this same lifecycle.
+           */
+        }
+      } else if (this._terminal) {
+        this._terminal.input(data);
+      }
+    }
+
+    this._data = [];
+  }
+
   attachTerminal(terminal: ITerminal) {
     for (const { type, data } of this._data) {
       if (type === 'echo') {
@@ -195,22 +218,19 @@ export class TerminalPanel implements ITerminal {
     }
 
     if (this.cols != null && this.rows != null) {
-      this._process?.resize({ cols: this.cols, rows: this.rows });
+      this._process?.resize(this.cols, this.rows);
+      this._nodeTerminal?.fit();
     }
   }
 }
 
 /**
  * Normalize the provided configuration to a configuration which is easier to parse.
- *
- * @param config The terminal configuration.
- * @returns A normalized terminal configuration.
  */
 function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalConfig {
   let activePanel = 0;
 
   if (config === false) {
-    // if the value is `false`, we don't render anything
     return {
       panels: [],
       activePanel,
@@ -218,10 +238,8 @@ function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalCon
     };
   }
 
-  // reset the count so that the auto-infered titles are indexed properly
   TerminalPanel.resetCount();
 
-  // if no config is set, or the value is `true`, we just render the output panel
   if (config === undefined || config === true) {
     return {
       panels: [new TerminalPanel('output')],

@@ -268,41 +268,6 @@ export const webcontainerSchema = commandsSchema.extend({
     .describe(
       'Display a link in lesson for editing the page content. The value is a URL pattern where `${path}` is replaced with the lesson’s location relative to `src/content/tutorial`.',
     ),
-  openInStackBlitz: z
-    .union([
-      // `false` for disabling the link
-      z.boolean(),
-
-      z.strictObject({
-        projectTitle: z.string().optional(),
-        projectDescription: z.string().optional(),
-        projectTemplate: z
-          .union([
-            z.literal('html'),
-            z.literal('node'),
-            z.literal('angular-cli'),
-            z.literal('create-react-app'),
-            z.literal('javascript'),
-            z.literal('polymer'),
-            z.literal('typescript'),
-            z.literal('vue'),
-          ])
-          .optional(),
-      }),
-    ])
-    .optional()
-    .describe('Display a link for opening current lesson in StackBlitz.'),
-  downloadAsZip: z
-    .union([
-      // `false` for disabling the button
-      z.boolean(),
-
-      z.strictObject({
-        filename: z.string(),
-      }),
-    ])
-    .optional()
-    .describe('Display a button for downloading the current lesson as `.zip` file.'),
 });
 
 export const baseSchema = webcontainerSchema.extend({

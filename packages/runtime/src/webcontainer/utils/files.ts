@@ -1,7 +1,5 @@
+import type { Nodepod } from '@r1ck404/nodepod';
 import type { Files } from '@tutorialkit/types';
-import type { DirectoryNode, FileNode, FileSystemTree } from '@webcontainer/api';
-
-type FileSystemTreeNode = DirectoryNode | FileNode | undefined;
 
 export function areFilesEqual(a: Files, b: Files) {
   const aFilePaths = Object.keys(a);
@@ -61,46 +59,20 @@ export function diffFiles(before: Files, after: Files): FilesDiff {
   };
 }
 
-export function toFileTree(files: Files): FileSystemTree {
-  const root: FileSystemTree = {};
+export async function writeFilesToPod(pod: Nodepod, files: Files): Promise<void> {
+  const directories = new Set<string>();
 
-  for (const filePath in files) {
-    const segments = filePath.split('/').filter((segment) => segment);
+  for (const filePath of Object.keys(files)) {
+    const segments = filePath.split('/').filter(Boolean);
+    let parent = '';
 
-    let currentTree: FileSystemTree = root;
-
-    for (let i = 0; i < segments.length; ++i) {
-      const name = segments[i];
-
-      if (i === segments.length - 1) {
-        currentTree[name] = {
-          file: {
-            contents: files[filePath],
-          },
-        };
-      } else {
-        let folder = currentTree[name] as FileSystemTreeNode;
-
-        assertDirectoryNode(folder);
-
-        if (!folder) {
-          folder = {
-            directory: {},
-          };
-
-          currentTree[name] = folder;
-        }
-
-        currentTree = folder.directory;
-      }
+    for (let i = 0; i < segments.length - 1; i++) {
+      parent += `/${segments[i]}`;
+      directories.add(parent);
     }
   }
 
-  return root;
-}
+  await Promise.all([...directories].map((dir) => pod.fs.mkdir(dir, { recursive: true })));
 
-function assertDirectoryNode(node: FileSystemTreeNode): asserts node is DirectoryNode | undefined {
-  if (node && !('directory' in node)) {
-    throw new Error('Expected directory node');
-  }
+  await Promise.all(Object.entries(files).map(([filePath, content]) => pod.fs.writeFile(filePath, content)));
 }
