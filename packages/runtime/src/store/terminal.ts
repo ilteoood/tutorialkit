@@ -1,25 +1,28 @@
 import type { TerminalSchema } from '@tutorialkit/types';
-import { WebContainer, auth } from '@webcontainer/api';
+import type { Nodepod } from '@r1ck404/nodepod';
 import { atom } from 'nanostores';
 import { tick } from '../utils/promises.js';
 import { isWebContainerSupported } from '../utils/support.js';
 import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
 import { newJSHProcess } from '../webcontainer/shell.js';
-import { TerminalConfig, TerminalPanel } from '../webcontainer/terminal-config.js';
+import {
+  TerminalConfig,
+  TerminalPanel,
+  type RuntimeProcess,
+  asRuntimeProcess,
+} from '../webcontainer/terminal-config.js';
+
+// Re-export so neighbouring store modules (e.g. tutorial-runner) can name
+// the runtime process type without reaching into the webcontainer folder.
+export type { RuntimeProcess };
 
 export class TerminalStore {
   terminalConfig = atom<TerminalConfig>(new TerminalConfig());
 
   private _output: ITerminal | undefined = undefined;
-  private _webcontainerLoaded = false;
 
-  constructor(
-    private _webcontainer: Promise<WebContainer>,
-    private _useAuth: boolean,
-  ) {
-    this._webcontainer.then(() => {
-      this._webcontainerLoaded = true;
-    });
+  constructor(private _nodepod: Promise<Nodepod>) {
+    this._nodepod.then(() => undefined);
   }
 
   getOutputPanel(): ITerminal | undefined {
@@ -44,7 +47,7 @@ export class TerminalStore {
       panelMap.delete(panel.id);
 
       if (oldPanel?.terminal) {
-        // if we found a previous panel with the same id, attach that terminal to the new panel
+        // re-use the previous terminal handle (the same xterm.js instance)
         panel.attachTerminal(oldPanel.terminal);
       }
 
@@ -53,13 +56,15 @@ export class TerminalStore {
       }
 
       if (panel.type === 'terminal' && !oldPanel) {
-        // if the panel is a terminal panel, and this panel didn't exist before, spawn a new JSH process
-        this._bootWebContainer(panel)
-          .then(async (webcontainerInstance) => {
-            panel.attachProcess(await newJSHProcess(webcontainerInstance, panel, panel.processOptions));
+        // first-time terminal panel: spawn an interactive shell
+        this._bootNodepod(panel)
+          .then(async (nodepod) => {
+            const process = await newJSHProcess(nodepod, panel);
+            panel.attachProcess(asRuntimeProcess(process));
           })
           .catch(() => {
-            // do nothing
+            // The boot screen will surface the underlying error to the user;
+            // we just need to make sure this promise is observed.
           });
       }
     }
@@ -74,15 +79,11 @@ export class TerminalStore {
 
   /**
    * Attaches the provided terminal with the panel matching the provided ID.
-   *
-   * @param id The ID of the panel to attach the terminal with.
-   * @param terminal The terminal to hook up to the JSH process.
    */
   async attachTerminal(id: string, terminal: ITerminal) {
     const panel = this.terminalConfig.get().panels.find((panel) => panel.id === id);
 
     if (!panel) {
-      // if we don't have a panel with the provided id, just exit
       return;
     }
 
@@ -90,37 +91,24 @@ export class TerminalStore {
   }
 
   onTerminalResize(cols: number, rows: number) {
-    // iterate over all terminal panels and resize all processes
+    // Nodepod processes don't expose a TTY resize through the public API.
+    // Each terminal panel forwards this to its own process in its `resize()`.
     for (const panel of this.terminalConfig.get().panels) {
-      panel.process?.resize({ cols, rows });
+      panel.resize({ cols, rows });
     }
   }
 
-  private async _bootWebContainer(terminal: ITerminal) {
+  private async _bootNodepod(terminal: ITerminal) {
     validateWebContainerSupported(terminal);
 
-    const isLoaded = this._webcontainerLoaded;
-
-    if (this._useAuth && !isLoaded) {
-      terminal.write('Waiting for authentication to complete...');
-
-      await auth.loggedIn();
-
-      clearTerminal(terminal);
-    }
-
-    if (!isLoaded) {
-      terminal.write('Booting WebContainer...');
-    }
+    terminal.write('Booting Nodepod...');
 
     try {
-      const webcontainerInstance = await this._webcontainer;
+      const nodepod = await this._nodepod;
 
-      if (!isLoaded) {
-        clearTerminal(terminal);
-      }
+      clearTerminal(terminal);
 
-      return webcontainerInstance;
+      return nodepod;
     } catch (error) {
       clearTerminal(terminal);
 
@@ -128,12 +116,12 @@ export class TerminalStore {
 
       terminal.write(
         [
-          escapeCodes.red(`Looks like your browser's configuration is blocking WebContainers.`),
+          escapeCodes.red(`Looks like your browser's configuration is blocking Nodepod's worker runtime.`),
           '',
-          `Let's troubleshoot this!`,
+          `Nodepod needs cross-origin isolation (COOP/COEP) and a WebAssembly-capable browser.`,
           '',
           'Read more at:',
-          'https://webcontainers.io/guides/browser-config',
+          'https://r1ck404.github.io/Nodepod/docs/troubleshooting/',
           '',
         ].join('\n'),
       );
@@ -149,10 +137,10 @@ function validateWebContainerSupported(terminal: ITerminal) {
       [
         escapeCodes.red('Incompatible Web Browser'),
         '',
-        `WebContainers currently work in Chromium-based browsers, Firefox, and Safari 16.4. We're hoping to add support for more browsers as they implement the necessary Web Platform features.`,
+        `Nodepod currently works in Chromium-based browsers, Firefox, and Safari 16.4+. We're hoping to add support for more browsers as they implement the necessary Web Platform features.`,
         '',
         'Read more about browser support:',
-        'https://webcontainers.io/guides/browser-support',
+        'https://r1ck404.github.io/Nodepod/docs/troubleshooting/',
         '',
       ].join('\n'),
     );

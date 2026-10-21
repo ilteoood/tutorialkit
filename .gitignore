@@ -26,3 +26,5 @@ tsconfig.build.tsbuildinfo
 .tmp-*
 /e2e/**/test-results
 /e2e/**/.astro
+.tokensave
+core.*

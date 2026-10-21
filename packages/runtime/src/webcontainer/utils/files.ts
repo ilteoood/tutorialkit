@@ -1,7 +1,5 @@
 import type { Files } from '@tutorialkit/types';
-import type { DirectoryNode, FileNode, FileSystemTree } from '@webcontainer/api';
-
-type FileSystemTreeNode = DirectoryNode | FileNode | undefined;
+import { fromRuntimePath, toRuntimePath } from '../path-utils.js';
 
 export function areFilesEqual(a: Files, b: Files) {
   const aFilePaths = Object.keys(a);
@@ -61,46 +59,42 @@ export function diffFiles(before: Files, after: Files): FilesDiff {
   };
 }
 
-export function toFileTree(files: Files): FileSystemTree {
-  const root: FileSystemTree = {};
-
-  for (const filePath in files) {
-    const segments = filePath.split('/').filter((segment) => segment);
-
-    let currentTree: FileSystemTree = root;
-
-    for (let i = 0; i < segments.length; ++i) {
-      const name = segments[i];
-
-      if (i === segments.length - 1) {
-        currentTree[name] = {
-          file: {
-            contents: files[filePath],
-          },
-        };
-      } else {
-        let folder = currentTree[name] as FileSystemTreeNode;
-
-        assertDirectoryNode(folder);
-
-        if (!folder) {
-          folder = {
-            directory: {},
-          };
-
-          currentTree[name] = folder;
-        }
-
-        currentTree = folder.directory;
-      }
-    }
-  }
-
-  return root;
+/**
+ * Write the supplied files into the Nodepod VFS, prefixing every path with
+ * the pod's workdir.
+ *
+ * Replaces WebContainer's `mount(FileSystemTree)` call -- Nodepod doesn't
+ * expose a tree-mount, so we walk the editor's flat `Files` map and write
+ * each entry through `fs.writeFile`.
+ */
+export async function writeFiles(
+  fs: { writeFile(path: string, contents: string | Uint8Array): Promise<void> },
+  files: Files,
+): Promise<void> {
+  await Promise.all(
+    Object.entries(files).map(([editorPath, contents]) => fs.writeFile(toRuntimePath(editorPath), contents as string)),
+  );
 }
 
-function assertDirectoryNode(node: FileSystemTreeNode): asserts node is DirectoryNode | undefined {
-  if (node && !('directory' in node)) {
-    throw new Error('Expected directory node');
-  }
+export async function readFileText(
+  fs: { readFile(path: string, encoding: 'utf-8'): Promise<string> },
+  editorPath: string,
+): Promise<string> {
+  return fs.readFile(toRuntimePath(editorPath), 'utf-8');
 }
+
+export async function readdir(
+  fs: { readdir(path: string): Promise<string[]> },
+  editorPath: string,
+): Promise<string[]> {
+  return fs.readdir(toRuntimePath(editorPath));
+}
+
+export async function remove(
+  fs: { rm(path: string, opts: { force: true }): Promise<void> },
+  editorPath: string,
+): Promise<void> {
+  await fs.rm(toRuntimePath(editorPath), { force: true });
+}
+
+export { fromRuntimePath, toRuntimePath };

@@ -7,6 +7,12 @@ declare module 'tutorialkit:store' {
 }
 
 declare module 'tutorialkit:core' {
-  /** Promise that resolves to the webcontainer that's running in the current lesson. */
-  export const webcontainer: Promise<import('@webcontainer/api').WebContainer>;
+  type Nodepod = Awaited<ReturnType<typeof import('@tutorialkit/runtime').safeBoot>>;
+
+  /**
+   * Promise that resolves to the runtime container that's running in the
+   * current lesson. The symbol is still named `webcontainer` for backwards
+   * compatibility with tutorials written against the old API.
+   */
+  export const webcontainer: Promise<Nodepod>;
 }

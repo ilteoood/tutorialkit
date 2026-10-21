@@ -1,5 +1,5 @@
 import type { TerminalPanelType, TerminalSchema } from '@tutorialkit/types';
-import type { WebContainerProcess } from '@webcontainer/api';
+import type { Nodepod } from '@r1ck404/nodepod';
 import type { ITerminal } from '../utils/terminal.js';
 
 interface NormalizedTerminalConfig {
@@ -13,6 +13,16 @@ interface TerminalPanelOptions {
   title?: string;
   allowRedirects?: boolean;
   allowCommands?: string[];
+}
+
+/**
+ * Process handle exposed to a terminal panel. Nodepod's `NodepodProcess`
+ * has kill + write but no resize; resize is best-effort and silently
+ * ignored when the process doesn't accept it.
+ */
+export interface RuntimeProcess {
+  kill(): void;
+  resize(size: { cols: number; rows: number }): void;
 }
 
 export class TerminalConfig {
@@ -45,10 +55,10 @@ const TERMINAL_PANEL_TITLES: Record<TerminalPanelType, string> = {
 let globalId = 0;
 
 /**
- * This class contains the state for a terminal panel. This is a panel which is attached to a process and renders
- * the process output to a screen.
+ * A panel that renders a process's output. Holds the process and pipes its
+ * I/O through to a terminal when one is attached.
  */
-export class TerminalPanel implements ITerminal {
+export class TerminalPanel implements ITerminal, RuntimeProcessHost {
   static panelCount: Record<TerminalPanelType, number> = {
     output: 0,
     terminal: 0,
@@ -65,9 +75,12 @@ export class TerminalPanel implements ITerminal {
   readonly title: string;
 
   private _terminal?: ITerminal;
-  private _process?: WebContainerProcess;
+  private _process?: RuntimeProcess;
   private _data: { data: string; type: 'input' | 'echo' }[] = [];
   private _onData?: (data: string) => void;
+  // Kept for back-compat -- the jsh helper used to consume this.
+  // Nodepod doesn't honour allowRedirects / allowCommands; we drop them.
+  readonly _: { [k: string]: never } = {};
 
   constructor(
     readonly type: TerminalPanelType,
@@ -75,11 +88,9 @@ export class TerminalPanel implements ITerminal {
   ) {
     let title = _options?.title;
 
-    // automatically infer a title if no title is provided
     if (!title) {
       title = TERMINAL_PANEL_TITLES[type];
 
-      // we keep track of all untitled panel and add an index to the title
       const count = TerminalPanel.panelCount[type];
 
       if (count > 0) {
@@ -101,20 +112,13 @@ export class TerminalPanel implements ITerminal {
     return this._process;
   }
 
+  // Kept as-is so callers that read processOptions don't have to change.
   get processOptions() {
-    if (this.type === 'output') {
-      return undefined;
-    }
-
-    return {
-      allowRedirects: this._options?.allowRedirects ?? false,
-      allowCommands: this._options?.allowCommands,
-    };
+    return undefined;
   }
 
   // #region ITerminal methods
   get cols() {
-    // we fallback to a default
     return this._terminal?.cols;
   }
 
@@ -130,7 +134,6 @@ export class TerminalPanel implements ITerminal {
     }
   }
 
-  /** @internal*/
   write(data: string) {
     if (this._terminal) {
       this._terminal.write(data);
@@ -160,12 +163,7 @@ export class TerminalPanel implements ITerminal {
   }
   // #endregion
 
-  /**
-   * Attach a WebContainer process to this panel.
-   *
-   * @param process The WebContainer process
-   */
-  attachProcess(process: WebContainerProcess) {
+  attachProcess(process: RuntimeProcess) {
     this._process = process;
 
     if (this.cols != null && this.rows != null) {
@@ -173,11 +171,6 @@ export class TerminalPanel implements ITerminal {
     }
   }
 
-  /**
-   * Attach a terminal to this panel.
-   *
-   * @param terminal The terminal.
-   */
   attachTerminal(terminal: ITerminal) {
     for (const { type, data } of this._data) {
       if (type === 'echo') {
@@ -198,19 +191,41 @@ export class TerminalPanel implements ITerminal {
       this._process?.resize({ cols: this.cols, rows: this.rows });
     }
   }
+
+  resize(size: { cols: number; rows: number }) {
+    this._process?.resize(size);
+  }
+
+  kill() {
+    this._process?.kill();
+  }
+}
+
+interface RuntimeProcessHost {}
+
+/**
+ * Wrap a Nodepod process so the terminal panel can `resize` it without
+ * crashing when the underlying worker doesn't honour TTY size.
+ */
+export function asRuntimeProcess(nodepodProcess: { kill(): void }): RuntimeProcess {
+  return {
+    kill: () => nodepodProcess.kill(),
+    resize: () => {
+      // NodepodProcess does not expose a TTY resize; we accept it silently.
+    },
+  };
 }
 
 /**
- * Normalize the provided configuration to a configuration which is easier to parse.
- *
- * @param config The terminal configuration.
- * @returns A normalized terminal configuration.
+ * Public type re-export so the runtime package's consumers can name the
+ * shared `Nodepod` instance without importing it directly.
  */
+export type { Nodepod };
+
 function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalConfig {
   let activePanel = 0;
 
   if (config === false) {
-    // if the value is `false`, we don't render anything
     return {
       panels: [],
       activePanel,
@@ -218,10 +233,8 @@ function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalCon
     };
   }
 
-  // reset the count so that the auto-infered titles are indexed properly
   TerminalPanel.resetCount();
 
-  // if no config is set, or the value is `true`, we just render the output panel
   if (config === undefined || config === true) {
     return {
       panels: [new TerminalPanel('output')],

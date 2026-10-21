@@ -1,4 +1,5 @@
-import { tutorialStore, webcontainer as webcontainerPromise } from './webcontainer.js';
+import JSZip from 'jszip';
+import { tutorialStore } from './webcontainer.js';
 
 export function DownloadButton() {
   return (
@@ -19,8 +20,14 @@ async function onClick() {
     throw new Error('Missing lesson');
   }
 
-  const webcontainer = await webcontainerPromise;
-  const data = await webcontainer.export('/home/tutorial', { format: 'zip', excludes: ['node_modules'] });
+  const zip = new JSZip();
+  const snapshot = tutorialStore.takeSnapshot();
+
+  for (const [filePath, contents] of Object.entries(snapshot.files)) {
+    zip.file(filePath, new TextEncoder().encode(contents));
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
 
   let filename =
     typeof lesson.data.downloadAsZip === 'object'
@@ -34,7 +41,7 @@ async function onClick() {
   const link = document.createElement('a');
   link.style.display = 'none';
   link.download = filename;
-  link.href = URL.createObjectURL(new Blob([data] as any, { type: 'application/zip' }));
+  link.href = URL.createObjectURL(blob);
 
   document.body.appendChild(link);
   link.click();

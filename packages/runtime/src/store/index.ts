@@ -1,5 +1,5 @@
 import type { FileDescriptor, Files, FilesystemError, Lesson } from '@tutorialkit/types';
-import type { WebContainer } from '@webcontainer/api';
+import type { Nodepod } from '@r1ck404/nodepod';
 import { atom, type ReadableAtom } from 'nanostores';
 import { LessonFilesFetcher } from '../lesson-files.js';
 import { newTask, type Task } from '../tasks.js';
@@ -15,12 +15,13 @@ import { TerminalStore } from './terminal.js';
 import { TutorialRunner } from './tutorial-runner.js';
 
 interface StoreOptions {
-  webcontainer: Promise<WebContainer>;
+  nodepod: Promise<Nodepod>;
 
   /**
-   * Whether or not authentication is used for the WebContainer API.
+   * Kept for backwards compatibility -- Nodepod has no auth flow.
+   * Setting it to `true` is a no-op.
    */
-  useAuth: boolean;
+  useAuth?: boolean;
 
   /**
    * The base path to use when fetching files.
@@ -28,8 +29,15 @@ interface StoreOptions {
   basePathname?: string;
 }
 
+/**
+ * Backwards-compatible name for the runtime container. The tutorialkit:core
+ * virtual module re-exports this symbol under the historical label
+ * `webcontainer`; new code should prefer `nodepod`.
+ */
+export type WebContainerRuntime = Nodepod;
+
 export class TutorialStore {
-  private _webcontainer: Promise<WebContainer>;
+  private _nodepod: Promise<Nodepod>;
 
   private _runner: TutorialRunner;
   private _previewsStore: PreviewsStore;
@@ -48,18 +56,18 @@ export class TutorialStore {
   private _lessonTemplate: Files | undefined;
 
   /**
-   * Whether or not the current lesson is fully loaded in WebContainer
+   * Whether or not the current lesson is fully loaded in Nodepod
    * and in every stores.
    */
   readonly lessonFullyLoaded = atom<boolean>(false);
 
-  constructor({ useAuth, webcontainer, basePathname }: StoreOptions) {
-    this._webcontainer = webcontainer;
+  constructor({ useAuth: _useAuth, nodepod, basePathname }: StoreOptions) {
+    this._nodepod = nodepod;
     this._editorStore = new EditorStore();
     this._lessonFilesFetcher = new LessonFilesFetcher(basePathname);
-    this._previewsStore = new PreviewsStore(this._webcontainer);
-    this._terminalStore = new TerminalStore(this._webcontainer, useAuth);
-    this._runner = new TutorialRunner(this._webcontainer, this._terminalStore, this._editorStore, this._stepController);
+    this._previewsStore = new PreviewsStore(this._nodepod);
+    this._terminalStore = new TerminalStore(this._nodepod);
+    this._runner = new TutorialRunner(this._nodepod, this._terminalStore, this._editorStore, this._stepController);
 
     /**
      * By having this code under `import.meta.hot`, it gets:
@@ -212,7 +220,7 @@ export class TutorialStore {
     return this._editorStore.currentDocument;
   }
 
-  /** Status of the webcontainer's booting */
+  /** Status of the runtime's booting */
   get bootStatus(): ReadableAtom<BootStatus> {
     return bootStatus;
   }
@@ -295,7 +303,7 @@ export class TutorialStore {
     return !!this._lesson && Object.keys(this._lesson.solution[1]).length >= 1;
   }
 
-  /** Unlock webcontainer's boot process if it was in `'blocked'` state */
+  /** Unlock runtime's boot process if it was in `'blocked'` state */
   unblockBoot() {
     unblockBoot();
   }
@@ -333,10 +341,8 @@ export class TutorialStore {
 
   /** Add new file to file tree */
   async addFile(filePath: string): Promise<void> {
-    // always select the existing or newly created file
     this.setSelectedFile(filePath);
 
-    // prevent creating duplicates
     if (this._editorStore.files.get().find((file) => file.path === filePath)) {
       return;
     }
@@ -351,7 +357,6 @@ export class TutorialStore {
 
   /** Add new folder to file tree */
   async addFolder(folderPath: string) {
-    // prevent creating duplicates
     if (this._editorStore.files.get().some((file) => file.path.startsWith(folderPath))) {
       return;
     }

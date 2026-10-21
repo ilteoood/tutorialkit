@@ -1,78 +1,65 @@
-import type { PortListener, WebContainer } from '@webcontainer/api';
-import { assert, expect, test } from 'vitest';
+import { assert, expect, test, vi } from 'vitest';
 import { PreviewsStore } from './previews.js';
 
-test("preview is set ready on webcontainer's event", async () => {
-  const { store, emit } = await getStore();
-  store.setPreviews([3000]);
+const POLL_INTERVAL_MS = 25;
 
-  assert(store.previews.value);
-  expect(store.previews.value[0].ready).toBe(false);
+async function getStore(pollIntervalMs = POLL_INTERVAL_MS) {
+  const urlForPort = vi.fn<(port: number) => string | null>().mockImplementation(() => null);
 
-  emit(3000, 'open', 'https://localhost');
-
-  expect(store.previews.value![0].ready).toBe(true);
-});
-
-test('preview is not set ready when different port is ready', async () => {
-  const { store, emit } = await getStore();
-  store.setPreviews([3000]);
-
-  assert(store.previews.value);
-  expect(store.previews.value[0].ready).toBe(false);
-
-  emit(3001, 'open', 'https://localhost');
-
-  expect(store.previews.value[0].ready).toBe(false);
-});
-
-test('marks multiple preview infos ready', async () => {
-  const { store, emit } = await getStore();
-  store.setPreviews([
-    { port: 3000, title: 'Dev' },
-    { port: 3000, title: 'Docs', pathname: '/docs' },
-  ]);
-
-  assert(store.previews.value);
-  expect(store.previews.value).toHaveLength(2);
-
-  expect(store.previews.value[0].ready).toBe(false);
-  expect(store.previews.value[0].pathname).toBe(undefined);
-
-  expect(store.previews.value[1].ready).toBe(false);
-  expect(store.previews.value[1].pathname).toBe('/docs');
-
-  emit(3000, 'open', 'https://localhost');
-
-  expect(store.previews.value[0].ready).toBe(true);
-  expect(store.previews.value[1].ready).toBe(true);
-});
-
-async function getStore() {
-  const listeners: PortListener[] = [];
-
-  const webcontainer: Pick<WebContainer, 'on'> = {
-    on: (type, listener) => {
-      if (type === 'port') {
-        listeners.push(listener as PortListener);
-      }
-
-      return () => undefined;
+  const nodepod = {
+    port: (port: number) => urlForPort(port),
+    teardown: async () => {
+      return undefined;
     },
   };
 
-  const promise = new Promise<WebContainer>((resolve) => {
-    resolve(webcontainer as WebContainer);
-  });
+  const promise = Promise.resolve(nodepod);
+  const store = new PreviewsStore(promise, { pollIntervalMs });
 
   await promise;
 
-  return {
-    store: new PreviewsStore(promise),
-    emit: (...args: Parameters<PortListener>) => {
-      assert(listeners.length > 0, 'Port listeners were not captured');
+  // give the poller one tick to land
+  await new Promise((resolve) => setTimeout(resolve, pollIntervalMs * 2));
 
-      listeners.forEach((cb) => cb(...args));
-    },
-  };
+  return { store, urlForPort };
 }
+
+test('preview is not ready before any port resolves', async () => {
+  const { store } = await getStore();
+
+  store.setPreviews([3000]);
+
+  assert(store.previews.value);
+  expect(store.previews.value[0].ready).toBe(false);
+
+  store.dispose();
+});
+
+test('preview flips to ready when the polled port resolves', async () => {
+  const { store, urlForPort } = await getStore();
+  store.setPreviews([3000]);
+
+  urlForPort.mockImplementation(() => 'https://localhost-3000.example/');
+
+  await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS * 4));
+
+  assert(store.previews.value);
+  expect(store.previews.value[0].ready).toBe(true);
+  expect(store.previews.value[0].baseUrl).toBe('https://localhost-3000.example/');
+
+  store.dispose();
+});
+
+test('preview does not flip ready when a different port resolves', async () => {
+  const { store, urlForPort } = await getStore();
+  store.setPreviews([3000]);
+
+  urlForPort.mockImplementation((port) => (port === 3001 ? 'https://localhost-3001.example/' : null));
+
+  await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS * 4));
+
+  assert(store.previews.value);
+  expect(store.previews.value[0].ready).toBe(false);
+
+  store.dispose();
+});

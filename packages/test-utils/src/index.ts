@@ -1,25 +1,31 @@
 import path from 'node:path';
-import type { DirectoryNode, FileNode, FileSystemTree, SpawnOptions, WebContainer } from '@webcontainer/api';
 import { vi, type Mocked } from 'vitest';
+import type { Nodepod, NodepodProcess, SpawnOptions } from '@r1ck404/nodepod';
 
-interface FakeProcess {
+export interface FakeProcess {
   pid: number;
 
   command: string;
   args: string[];
-  options?: SpawnOptions;
 
   exit: Promise<number>;
   output: ReadableStream<string>;
   input: WritableStream<string>;
   kill(): void;
   resize(cols: number, rows: number): void;
+  completion: Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
-export type MockedWebContainer = Mocked<WebContainer> & {
-  _fakeFs: FileSystemTree;
+type Directory = Record<string, FakeNode>;
+
+export type MockedNodepod = Mocked<Pick<Nodepod, 'fs' | 'spawn' | 'port' | 'teardown' | 'request'>> & {
+  _fakeFs: Directory;
   _fakeProcesses: FakeProcess[];
 };
+
+type FakeNode =
+  | { file: { contents: string } }
+  | { directory: Directory };
 
 export type FakeProcessFactory = (
   command: string,
@@ -43,20 +49,58 @@ export function resetProcessFactory() {
   fakeProcessFactory = defaultProcessFactory;
 }
 
-vi.mock('@webcontainer/api', () => {
-  const WebContainer = vi.fn<[], MockedWebContainer>(function (this: MockedWebContainer) {
+/**
+ * Returns a vitest mock factory that replaces `@r1ck404/nodepod` with an
+ * in-memory fake filesystem and process recorder. Use it from a spec file:
+ *
+ * ```ts
+ * vi.mock('@r1ck404/nodepod', () => mockNodepod());
+ * ```
+ *
+ * Returning the factory (rather than calling `vi.mock` here) lets the spec
+ * file own the mock, which Vitest's transformer requires to hoist properly.
+ */
+export function mockNodepod() {
+  // SAFETY: vitest's `vi.fn()` types don't include a `new`-callable shape, but
+  // the test helpers below construct one. The double `unknown` widens the type
+  // enough for `new (Nodepod as unknown as new () => MockedNodepod)()`.
+  const Nodepod = vi.fn(function (this: MockedNodepod) {
     this.fs = {
       readdir: vi.fn(async () => []),
-      readFile: vi.fn(async (filePath) => {
+      readFile: vi.fn(async (filePath: string) => {
         const fileNode = getFileNode(this._fakeFs, filePath);
 
         if (!fileNode) {
           throw new Error(`No file found at ${filePath}`);
         }
 
-        return fileNode.file.contents as any;
+        if ('file' in fileNode) {
+          return fileNode.file.contents as never;
+        }
+
+        throw new Error(`Not a file: ${filePath}`);
       }),
-      writeFile: vi.fn(async (filePath, contents) => {
+      writeFile: vi.fn(async (filePath: string, contents: string) => {
+        ensureDir(this._fakeFs, path.dirname(filePath));
+        storeFile(this._fakeFs, filePath, contents);
+      }),
+      mkdir: vi.fn(async (filePath: string, opts?: { recursive?: boolean }) => {
+        if (opts?.recursive) {
+          const segments = filePath.split('/').filter(Boolean);
+          let current: Directory = this._fakeFs;
+
+          for (const segment of segments) {
+            const existing: FakeNode | undefined = current[segment];
+
+            if (!existing || !('directory' in existing)) {
+              current[segment] = { directory: {} };
+            }
+
+            current = (current[segment] as { directory: Directory }).directory;
+          }
+          return;
+        }
+
         const parentFolder = path.dirname(filePath);
         const folderNode = getDirNode(this._fakeFs, parentFolder);
 
@@ -64,10 +108,9 @@ vi.mock('@webcontainer/api', () => {
           throw new Error(`No folder found at ${parentFolder}`);
         }
 
-        folderNode.directory[path.basename(filePath)] = { file: { contents } };
+        folderNode.directory[path.basename(filePath)] = { directory: {} };
       }),
-      mkdir: vi.fn(async () => '' as any),
-      rm: vi.fn(async (filePath, { recursive } = {}) => {
+      rm: vi.fn(async (filePath: string, { recursive }: { recursive?: boolean } = {}) => {
         const parentFolder = path.dirname(filePath);
         const folderNode = getDirNode(this._fakeFs, parentFolder);
 
@@ -76,8 +119,9 @@ vi.mock('@webcontainer/api', () => {
         }
 
         const fileName = path.basename(filePath);
+        const existing: FakeNode | undefined = folderNode.directory[fileName];
 
-        if (!recursive && 'directory' in folderNode.directory[fileName]) {
+        if (!recursive && existing && 'directory' in existing) {
           throw new Error(`Cannot recursively delete folder ${filePath}`);
         }
 
@@ -94,18 +138,22 @@ vi.mock('@webcontainer/api', () => {
     this._fakeFs = {};
     this._fakeProcesses = [];
 
+    this.port = vi.fn(() => null);
+    this.request = vi.fn(async () => ({ statusCode: 200, headers: {}, body: new Uint8Array() }));
+    this.teardown = vi.fn(async () => undefined);
+
     return this;
+  }) as unknown as unknown as { new (): MockedNodepod } & { boot: () => Promise<MockedNodepod> };
+
+  Nodepod.boot = vi.fn(async () => {
+    return new Nodepod();
   });
 
-  (WebContainer as any).boot = vi.fn(async () => {
-    return new WebContainer();
-  });
-
-  WebContainer.prototype.spawn = vi.fn(async function (
-    this: MockedWebContainer,
+  Nodepod.prototype.spawn = vi.fn(async function (
+    this: MockedNodepod,
     command: string,
     args: string[],
-    options?: SpawnOptions,
+    _options?: SpawnOptions,
   ) {
     const {
       exit,
@@ -119,13 +167,12 @@ vi.mock('@webcontainer/api', () => {
           // noop
         },
       }),
-    } = fakeProcessFactory(command, args, options);
+    } = fakeProcessFactory(command, args, _options);
 
     const fakeProcess: FakeProcess = {
       pid: this._fakeProcesses.length,
       command,
       args,
-      options,
       exit,
       output,
       input,
@@ -137,6 +184,10 @@ vi.mock('@webcontainer/api', () => {
       resize() {
         // noop
       },
+      completion: (async () => {
+        const exitCode = await exit;
+        return { stdout: '', stderr: '', exitCode };
+      })(),
     };
 
     Object.defineProperties(fakeProcess, {
@@ -146,45 +197,19 @@ vi.mock('@webcontainer/api', () => {
       input: { enumerable: false },
       kill: { enumerable: false },
       resize: { enumerable: false },
+      completion: { enumerable: false },
     });
 
     this._fakeProcesses.push(fakeProcess);
 
-    return fakeProcess;
-  });
+    return fakeProcess as unknown as NodepodProcess;
+  }) as never;
 
-  WebContainer.prototype.dispose = vi.fn();
-
-  WebContainer.prototype.mount = vi.fn(async function (this: MockedWebContainer, tree: FileSystemTree) {
-    mergeFileSystem(this._fakeFs, tree);
-  });
-
-  return { WebContainer };
-});
-
-function mergeFileSystem(mergedTree: FileSystemTree, incomingTree: FileSystemTree) {
-  for (const [path, value] of Object.entries(incomingTree)) {
-    if ('file' in value) {
-      mergedTree[path] = value;
-    } else {
-      let subTree: FileSystemTree;
-
-      if (mergedTree[path] && 'directory' in mergedTree[path]) {
-        subTree = (mergedTree[path] as DirectoryNode).directory;
-      } else {
-        subTree = {};
-        mergedTree[path] = {
-          directory: subTree,
-        };
-      }
-
-      mergeFileSystem(subTree, value.directory);
-    }
-  }
+  return { Nodepod };
 }
 
-function getFileNode(tree: FileSystemTree, filePath: string): FileNode | undefined {
-  const node = getNode(tree, filePath);
+function getFileNode(tree: Directory, filePath: string): FakeNode | undefined {
+  const node: FakeNode | undefined = getNode(tree, filePath);
 
   if (node && 'file' in node) {
     return node;
@@ -193,8 +218,8 @@ function getFileNode(tree: FileSystemTree, filePath: string): FileNode | undefin
   return undefined;
 }
 
-function getDirNode(tree: FileSystemTree, filePath: string): DirectoryNode | undefined {
-  const node = getNode(tree, filePath);
+function getDirNode(tree: Directory, filePath: string): { directory: Directory } | undefined {
+  const node: FakeNode | undefined = getNode(tree, filePath);
 
   if (node && 'directory' in node) {
     return node;
@@ -203,8 +228,10 @@ function getDirNode(tree: FileSystemTree, filePath: string): DirectoryNode | und
   return undefined;
 }
 
-function getNode(tree: FileSystemTree, filePath: string): FileNode | DirectoryNode | undefined {
+function getNode(tree: Directory, filePath: string): FakeNode | undefined {
   const segments = filePath.split('/');
+
+  let current: Directory | undefined = tree;
 
   for (let i = 0; i < segments.length; ++i) {
     const segment = segments[i];
@@ -213,26 +240,73 @@ function getNode(tree: FileSystemTree, filePath: string): FileNode | DirectoryNo
       continue;
     }
 
-    const node = tree[segment];
+    if (!current) {
+      return undefined;
+    }
+
+    const node: FakeNode | undefined = current[segment];
 
     if (!node) {
       return undefined;
     }
 
-    // if we reached the end of the path
     if (i === segments.length - 1) {
       return node;
     }
 
-    // if not we continue if it's a directory
     if ('directory' in node) {
-      tree = node.directory;
+      current = node.directory;
       continue;
     }
 
-    // if the path think the current segment is not a file then we need to return undefined
     return undefined;
   }
 
   return undefined;
+}
+
+function ensureDir(tree: Directory, folderPath: string) {
+  if (folderPath === '/' || folderPath === '' || folderPath === '.') {
+    return;
+  }
+
+  const segments = folderPath.split('/').filter(Boolean);
+  let current: Directory = tree;
+
+  for (const segment of segments) {
+    const existing: FakeNode | undefined = current[segment];
+
+    if (!existing) {
+      const next: { directory: Directory } = { directory: {} };
+      current[segment] = next;
+      current = next.directory;
+      continue;
+    }
+
+    if ('directory' in existing) {
+      current = existing.directory;
+    }
+  }
+}
+
+function storeFile(tree: Directory, filePath: string, contents: string) {
+  const segments = filePath.split('/').filter(Boolean);
+
+  if (segments.length === 0) {
+    return;
+  }
+
+  let current: Directory = tree;
+
+  for (let i = 0; i < segments.length - 1; ++i) {
+    const segment = segments[i];
+    const next = (current[segment] as { directory: Directory } | undefined)?.directory;
+    if (!next) {
+      return;
+    }
+    current = next;
+  }
+
+  const fileName = segments[segments.length - 1];
+  current[fileName] = { file: { contents } };
 }

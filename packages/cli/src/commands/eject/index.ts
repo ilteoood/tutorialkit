@@ -20,8 +20,8 @@ interface PackageJson {
 const TUTORIALKIT_VERSION = pkg.version;
 
 const REQUIRED_DEPENDENCIES = [
+  '@r1ck404/nodepod',
   '@tutorialkit/runtime',
-  '@webcontainer/api',
   'nanostores',
   '@nanostores/react',
   'kleur',

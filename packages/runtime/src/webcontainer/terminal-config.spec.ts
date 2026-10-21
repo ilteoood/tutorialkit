@@ -54,59 +54,34 @@ describe('TerminalConfig', () => {
 
     expect(config.panels[0].title).toBe('Foo');
     expect(config.panels[0].id).toBe('foo');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: false,
-      allowCommands: undefined,
-    });
     expect(config.panels[1].title).toBe('Bar');
     expect(config.panels[1].id).toBe('bar');
-    expect(config.panels[1].processOptions).toEqual({
-      allowRedirects: false,
-      allowCommands: undefined,
-    });
   });
 
-  it('should allow redirects and only allow certain commands when providing a panel type', () => {
+  it('should infer titles when a panel type is given', () => {
     const config = new TerminalConfig({
       allowRedirects: true,
       allowCommands: ['echo'],
       panels: 'terminal',
     });
 
+    // allowRedirects / allowCommands are accepted for back-compat with lesson
+    // schemas; Nodepod doesn't honor them, but we silently swallow the values.
     expect(config.panels[0].title).toBe('Terminal');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
   });
 
-  it('should allow redirects and only allow certain commands when providing a list of panel types', () => {
+  it('should infer titles for repeated panel types', () => {
     const config = new TerminalConfig({
-      allowRedirects: true,
-      allowCommands: ['echo'],
       panels: ['terminal', 'terminal', 'output'],
     });
 
     expect(config.panels[0].title).toBe('Terminal');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[1].title).toBe('Terminal 1');
-    expect(config.panels[1].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[2].title).toBe('Output');
-    expect(config.panels[2].processOptions).toBeUndefined();
   });
 
-  it('should allow redirects and only allow certain commands when providing a list of panel tuples', () => {
+  it('should infer titles for panel tuples', () => {
     const config = new TerminalConfig({
-      allowRedirects: true,
-      allowCommands: ['echo'],
       panels: [
         ['terminal', 'TERM 1'],
         ['terminal', 'TERM 2'],
@@ -115,25 +90,12 @@ describe('TerminalConfig', () => {
     });
 
     expect(config.panels[0].title).toBe('TERM 1');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[1].title).toBe('TERM 2');
-    expect(config.panels[1].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[2].title).toBe('OUT');
-    expect(config.panels[2].processOptions).toBeUndefined();
   });
 
-  it('should allow redirects and only allow certain commands when providing a list of panel objects', () => {
+  it('should infer titles for panel objects', () => {
     const config = new TerminalConfig({
-      allowRedirects: true,
-      allowCommands: ['echo'],
       panels: [
         { type: 'terminal', title: 'TERM 1' },
         { type: 'terminal', title: 'TERM 2' },
@@ -142,25 +104,12 @@ describe('TerminalConfig', () => {
     });
 
     expect(config.panels[0].title).toBe('TERM 1');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[1].title).toBe('TERM 2');
-    expect(config.panels[1].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[2].title).toBe('OUT');
-    expect(config.panels[2].processOptions).toBeUndefined();
   });
 
-  it('should allow overwriting `allowRedirects` and `allowCommands` per panel', () => {
+  it('should accept per-panel allowRedirects/allowCommands overrides without exposing them', () => {
     const config = new TerminalConfig({
-      allowRedirects: true,
-      allowCommands: ['echo'],
       panels: [
         { type: 'terminal', title: 'TERM 1', allowRedirects: false },
         { type: 'terminal', title: 'TERM 2', allowCommands: ['ls'] },
@@ -169,19 +118,8 @@ describe('TerminalConfig', () => {
     });
 
     expect(config.panels[0].title).toBe('TERM 1');
-    expect(config.panels[0].processOptions).toEqual({
-      allowRedirects: false,
-      allowCommands: ['echo'],
-    });
-
     expect(config.panels[1].title).toBe('TERM 2');
-    expect(config.panels[1].processOptions).toEqual({
-      allowRedirects: true,
-      allowCommands: ['ls'],
-    });
-
     expect(config.panels[2].title).toBe('OUT');
-    expect(config.panels[2].processOptions).toBeUndefined();
   });
 
   it('should have panels and activePanel with inferred names', () => {

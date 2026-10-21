@@ -1,6 +1,8 @@
-import type { AuthAPI } from '@webcontainer/api';
 import { atom } from 'nanostores';
 
-type AuthStore = ReturnType<AuthAPI['init']> | { status: 'no-auth' };
-
-export const authStore = atom<AuthStore>({ status: 'no-auth' });
+/**
+ * Nodepod has no auth flow, so this store is permanently at `no-auth`.
+ * Kept exported so existing tutorials that `import { authStore }` still
+ * compile.
+ */
+export const authStore = atom<{ status: 'no-auth' }>({ status: 'no-auth' });

@@ -1,14 +1,14 @@
 import type { CommandsSchema, Files } from '@tutorialkit/types';
-import type { IFSWatcher, WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { Nodepod, NodepodProcess } from '@r1ck404/nodepod';
 import picomatch from 'picomatch/posix.js';
 import { newTask, type Task, type TaskCancelled } from '../tasks.js';
+import { clearTerminal, type ITerminal } from '../utils/terminal.js';
 import { MultiCounter } from '../utils/multi-counter.js';
-import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
 import { Command, Commands } from '../webcontainer/command.js';
 import { StepsController } from '../webcontainer/steps.js';
-import { diffFiles, toFileTree } from '../webcontainer/utils/files.js';
+import { fromRuntimePath, toRuntimePath, writeFiles, remove } from '../webcontainer/utils/files.js';
 import type { EditorStore } from './editor.js';
-import type { TerminalStore } from './terminal.js';
+import type { RuntimeProcess, TerminalStore } from './terminal.js';
 
 interface LoadFilesOptions {
   /**
@@ -51,21 +51,21 @@ interface RunCommandsOptions {
 }
 
 /**
- * The idea behind this class is that it manages the state of WebContainer and exposes
- * an interface that makes sense to every component of TutorialKit.
+ * Manages the state of the Nodepod runtime and exposes an interface that
+ * makes sense to every component of TutorialKit.
  *
  * There should be only a single instance of this class.
  */
 export class TutorialRunner {
   private _currentLoadTask: Task<void | TaskCancelled> | undefined = undefined;
   private _currentProcessTask: Task<void | TaskCancelled> | undefined = undefined;
-  private _currentCommandProcess: WebContainerProcess | undefined = undefined;
+  private _currentCommandProcess: NodepodProcess | undefined = undefined;
   private _currentTemplate: Files | undefined = undefined;
   private _currentFiles: Files | undefined = undefined;
   private _currentRunCommands: Commands | undefined = undefined;
 
   private _ignoreFileEvents = new MultiCounter();
-  private _watcher: IFSWatcher | undefined;
+  private _watcher: { close(): void } | undefined;
   private _watchContentFromWebContainer: string[] | boolean = false;
   private _readyToWatch = false;
 
@@ -77,7 +77,7 @@ export class TutorialRunner {
   private _packageJsonPath = '';
 
   constructor(
-    private _webcontainer: Promise<WebContainer>,
+    private _nodepod: Promise<Nodepod>,
     private _terminalStore: TerminalStore,
     private _editorStore: EditorStore,
     private _stepController: StepsController,
@@ -87,7 +87,7 @@ export class TutorialRunner {
     this._watchContentFromWebContainer = value;
 
     if (this._readyToWatch && this._watchContentFromWebContainer) {
-      this._webcontainer.then((webcontainer) => this._setupWatcher(webcontainer));
+      this._nodepod.then((nodepod) => this._setupWatcher(nodepod));
     } else if (!this._watchContentFromWebContainer) {
       this._stopWatcher();
     }
@@ -98,7 +98,7 @@ export class TutorialRunner {
    *
    * This function is safe to call server side.
    *
-   * To actually run them in WebContainer see `runCommands`.
+   * To actually run them in Nodepod see `runCommands`.
    *
    * @param commands The commands schema.
    */
@@ -106,7 +106,6 @@ export class TutorialRunner {
     const newCommands = new Commands(commands);
     const anyChange = this._changeDetection(commands);
 
-    // if we already know that there's a change we can update the steps now
     if (anyChange) {
       this._stepController.setFromCommands([...newCommands]);
       this._currentRunCommands = newCommands;
@@ -115,7 +114,10 @@ export class TutorialRunner {
   }
 
   onTerminalResize(cols: number, rows: number) {
-    this._currentCommandProcess?.resize({ cols, rows });
+    if (cols && rows && this._currentCommandProcess) {
+      // NodepodProcess has no resize; the shell terminal handles its own
+      // dimensions. We keep the call for back-compat with `onTerminalResize`.
+    }
   }
 
   createFolder(folderPath: string): void {
@@ -125,20 +127,20 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(folderPath);
 
-        await webcontainer.fs.mkdir(folderPath);
+        await nodepod.fs.mkdir(toRuntimePath(folderPath), { recursive: true });
       },
       { ignoreCancel: true },
     );
   }
 
   /**
-   * Update the content of a single file in WebContainer.
+   * Update the content of a single file in Nodepod.
    *
    * @param filePath path of the file
    * @param content new content of the file
@@ -150,13 +152,13 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(filePath);
 
-        await webcontainer.fs.writeFile(filePath, content);
+        await nodepod.fs.writeFile(toRuntimePath(filePath), content);
 
         this._updateCurrentFiles({ [filePath]: content });
       },
@@ -165,7 +167,7 @@ export class TutorialRunner {
   }
 
   /**
-   * Update the provided files in WebContainer.
+   * Update the provided files in Nodepod.
    *
    * @param files Files to update.
    */
@@ -176,13 +178,13 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(Object.keys(files));
 
-        await webcontainer.mount(toFileTree(files));
+        await writeFiles(nodepod.fs, files);
 
         this._updateCurrentFiles(files);
       },
@@ -210,13 +212,13 @@ export class TutorialRunner {
         async () => {
           await previousLoadPromise;
 
-          const webcontainer = await this._webcontainer;
+          const nodepod = await this._nodepod;
 
           try {
             if (type === 'file') {
-              await webcontainer.fs.readFile(filepath);
+              await nodepod.fs.readFile(toRuntimePath(filepath));
             } else {
-              await webcontainer.fs.readdir(filepath);
+              await nodepod.fs.readdir(toRuntimePath(filepath));
             }
 
             resolve(true);
@@ -230,14 +232,7 @@ export class TutorialRunner {
   }
 
   /**
-   * Load the provided files into WebContainer and remove any other files that had been loaded previously.
-   *
-   * This function always waits for any previous `prepareFiles` or `updateFile(s)` call to have completed
-   * before sending the next one.
-   *
-   * Previous load operations will be cancelled if `options.abortPreviousLoad` was set to true (which is the default).
-   *
-   * @see {LoadFilesOptions}
+   * Load the provided files into Nodepod and remove any other files that had been loaded previously.
    */
   prepareFiles({ files, template, signal, abortPreviousLoad = true }: LoadFilesOptions): Promise<void | TaskCancelled> {
     const previousLoadPromise = this._currentLoadTask?.promise;
@@ -250,13 +245,11 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        // no watcher should be installed
         this._readyToWatch = false;
 
-        // stop current watcher if they are any
         this._stopWatcher();
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
@@ -264,15 +257,7 @@ export class TutorialRunner {
 
         signal.throwIfAborted();
 
-        if (this._currentFiles || this._currentTemplate) {
-          await updateFiles(
-            webcontainer,
-            { ...this._currentTemplate, ...this._currentFiles },
-            { ...template, ...files },
-          );
-        } else {
-          await webcontainer.mount(toFileTree({ ...template, ...files }));
-        }
+        await writeFiles(nodepod.fs, { ...template, ...files });
 
         this._currentTemplate = { ...template };
         this._currentFiles = { ...files };
@@ -287,16 +272,6 @@ export class TutorialRunner {
 
   /**
    * Runs the list of commands set with `setCommands`.
-   *
-   * This function always wait for any previous `runCommands` call to have completed before sending the next one.
-   * It will cancel the previous operation if `options.abortPreviousRun` was set to true.
-   *
-   * Commands are split into two:
-   *
-   *  - `prepareCommands`: For example commands like `npm install`, `mkdir -p src/foobar`, etc.
-   *  - `mainCommand`: Used to for example run a dev server or equivalent.
-   *
-   * @see {LoadFilesOptions}
    */
   runCommands({ abortPreviousRun = true }: RunCommandsOptions = {}): void {
     const previousTask = this._currentProcessTask;
@@ -310,11 +285,6 @@ export class TutorialRunner {
 
     this._currentProcessTask = newTask(
       async (signal) => {
-        /**
-         * Make sure we wait for everything to be loaded on the fs before
-         * checking for changes. We do this because we want to know if the
-         * `package.json` changed.
-         */
         await loadPromise;
 
         if (signal.aborted && abortPreviousRun) {
@@ -326,14 +296,6 @@ export class TutorialRunner {
         const anyChange = this._packageJsonDirty || commandsChanged;
 
         if (!anyChange) {
-          /**
-           * If there are no changes and we have a previous task, then
-           * we must link this new task to that previous one, otherwise
-           * the link is broken and that task will never ends.
-           *
-           * We create that link here by awaiting it. Note that this `if`
-           * here should always evaluate to true.
-           */
           if (previousTask) {
             const abortListener = () => previousTask.cancel();
             signal.addEventListener('abort', abortListener, { once: true });
@@ -344,7 +306,6 @@ export class TutorialRunner {
           return undefined;
         }
 
-        // there were changes so we reset the "commands changed"
         this._commandsChanged = false;
 
         if (abortPreviousRun) {
@@ -353,11 +314,11 @@ export class TutorialRunner {
 
         await previousTask?.promise;
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
-        return this._runCommands(webcontainer, newCommands, signal);
+        return this._runCommands(nodepod, newCommands, signal);
       },
       { ignoreCancel: true },
     );
@@ -381,11 +342,11 @@ export class TutorialRunner {
       async (signal) => {
         await Promise.all([previousProcessPromise, loadPromise]);
 
-        const webcontainer = await this._webcontainer;
+        const nodepod = await this._nodepod;
 
         signal.throwIfAborted();
 
-        return this._runCommands(webcontainer, previousRunCommands, signal);
+        return this._runCommands(nodepod, previousRunCommands, signal);
       },
       { ignoreCancel: true },
     );
@@ -393,21 +354,16 @@ export class TutorialRunner {
 
   /**
    * Get snapshot of runner's current files.
-   * Also prepares `package.json`'s `stackblitz.startCommand` with runner's commands.
-   *
-   * Note that file paths do not contain the leading `/`.
    */
   takeSnapshot() {
     const files: Record<string, string> = {};
 
-    // first add template files
     for (const [filePath, value] of Object.entries(this._currentTemplate || {})) {
       if (typeof value === 'string') {
         files[filePath.slice(1)] = value;
       }
     }
 
-    // next overwrite with files from editor
     for (const [filePath, value] of Object.entries(this._currentFiles || {})) {
       if (typeof value === 'string') {
         files[filePath.slice(1)] = value;
@@ -419,9 +375,10 @@ export class TutorialRunner {
 
       try {
         packageJson = JSON.parse(this._packageJsonContent);
-      } catch {}
+      } catch {
+        // A malformed package.json means we have nothing to merge into.
+      }
 
-      // add start commands when missing
       if (packageJson && !packageJson.stackblitz?.startCommand) {
         const mainCommand = this._currentRunCommands?.mainCommand?.shellCommand;
         const prepareCommands = (this._currentRunCommands?.prepareCommands || []).map((c) => c.shellCommand);
@@ -438,7 +395,7 @@ export class TutorialRunner {
     return { files };
   }
 
-  private async _runCommands(webcontainer: WebContainer, commands: Commands, signal: AbortSignal) {
+  private async _runCommands(nodepod: Nodepod, commands: Commands, signal: AbortSignal) {
     const output = this._terminalStore.getOutputPanel();
 
     clearTerminal(output);
@@ -453,7 +410,6 @@ export class TutorialRunner {
 
       this._stepController.setFromCommands(commandList);
 
-      // keep track of the current runnable command we are on
       let runnableCommands = 0;
 
       for (const [index, command] of commandList.entries()) {
@@ -473,14 +429,13 @@ export class TutorialRunner {
           status: 'running',
         });
 
-        // print newlines between commands to visually separate them from one another
         if (runnableCommands > 0) {
           output?.write('\n');
         }
 
         runnableCommands++;
 
-        this._currentCommandProcess = await this._newProcess(webcontainer, output, command.shellCommand);
+        this._currentCommandProcess = await this._newProcess(nodepod, command.shellCommand);
 
         try {
           signal.throwIfAborted();
@@ -492,11 +447,11 @@ export class TutorialRunner {
         if (isMainCommand) {
           shouldClearDirtyFlag = false;
 
-          this._setupWatcher(webcontainer);
+          this._setupWatcher(nodepod);
           this._clearDirtyState();
         }
 
-        const exitCode = await this._currentCommandProcess.exit;
+        const { exitCode } = await this._currentCommandProcess.completion;
 
         if (exitCode !== 0) {
           this._stepController.updateStep(index, {
@@ -506,10 +461,6 @@ export class TutorialRunner {
 
           this._stepController.skipRemaining(index + 1);
 
-          /**
-           * We don't clear the dirty flag in that case as there was an error and re-running all commands
-           * is the probably better than not running anything.
-           */
           shouldClearDirtyFlag = false;
 
           break;
@@ -528,43 +479,22 @@ export class TutorialRunner {
         }
       }
 
-      /**
-       * All commands were run but we didn't clear the dirty state.
-       * We have to, otherwise we would re-run those commands when moving
-       * to a lesson that has the exact same set of commands.
-       */
       if (shouldClearDirtyFlag) {
         this._clearDirtyState();
       }
 
-      // make sure the watcher is configured
-      this._setupWatcher(webcontainer);
+      this._setupWatcher(nodepod);
     } finally {
       signal.removeEventListener('abort', abortListener);
     }
   }
 
-  private async _newProcess(webcontainer: WebContainer, output: ITerminal | undefined, shellCommand: string) {
+  private async _newProcess(nodepod: Nodepod, shellCommand: string) {
     const [command, ...args] = shellCommand.split(' ');
 
-    output?.write(`${escapeCodes.magenta('❯')} ${escapeCodes.green(command)} ${args.join(' ')}\n`);
-
-    /**
-     * We spawn the process and use a fallback for cols and rows in case the output is not connected to a visible
-     * terminal yet.
-     */
-    const process = await webcontainer.spawn(command, args, {
-      terminal: output
-        ? {
-            cols: output.cols ?? 80,
-            rows: output.rows ?? 15,
-          }
-        : undefined,
+    return nodepod.spawn(command, args, {
+      cwd: '/home/tutorial',
     });
-
-    process.output.pipeTo(new WritableStream({ write: (data) => output?.write(data) }));
-
-    return process;
   }
 
   private _updateDirtyState(files: Files) {
@@ -580,7 +510,6 @@ export class TutorialRunner {
   }
 
   private _updateCurrentFiles(files: Files) {
-    // if the file was not tracked by the existing list of files, add it
     if (this._currentFiles) {
       for (const filePath in files) {
         this._currentFiles[filePath] = files[filePath];
@@ -593,18 +522,15 @@ export class TutorialRunner {
   }
 
   private _stopWatcher(): void {
-    // if there was a watcher terminate it
     if (this._watcher) {
       this._watcher.close();
       this._watcher = undefined;
     }
   }
 
-  private _setupWatcher(webcontainer: WebContainer) {
-    // inform that the watcher could be installed if we wanted to
+  private _setupWatcher(nodepod: Nodepod) {
     this._readyToWatch = true;
 
-    // if the watcher is alreay setup or we don't sync content we exit
     if (this._watcher || !this._watchContentFromWebContainer) {
       return;
     }
@@ -620,10 +546,8 @@ export class TutorialRunner {
 
       Promise.all(
         files.map(async ([filePath, encoding]) => {
-          // casts could be removed with an `if` but it feels weird
-          const content = (await webcontainer.fs.readFile(filePath, encoding as any)) as Uint8Array | string;
-
-          return [filePath, content] as const;
+          const contents = await nodepod.fs.readFile(toRuntimePath(filePath), encoding as 'utf-8');
+          return [filePath, contents] as const;
         }),
       ).then((fileContents) => {
         for (const [filePath, content] of fileContents) {
@@ -632,14 +556,6 @@ export class TutorialRunner {
       });
     };
 
-    /**
-     * Add a file to the list of files to read and schedule a read for later, effectively debouncing the reads.
-     *
-     * This does not cancel any existing requests because those are expected to be completed really
-     * fast. However every read request allocate memory that needs to be freed. The reason we debounce
-     * is to avoid running into OOM issues (which has happened in the past) and give time to the GC to
-     * cleanup the allocated buffers.
-     */
     const scheduleReadFor = (filePath: string, encoding: 'utf-8' | null) => {
       filesToRead.set(filePath, encoding);
 
@@ -647,42 +563,39 @@ export class TutorialRunner {
       timeoutId = setTimeout(readFiles, 100);
     };
 
-    this._watcher = webcontainer.fs.watch('.', { recursive: true }, (eventType, filename) => {
-      const filePath = `/${filename}`;
+    this._watcher = nodepod.fs.watch('/home/tutorial', { recursive: true }, (eventType: string, filename: string | null) => {
+      const editorPath = filename ? fromRuntimePath('/' + filename) : null;
 
-      // events we should ignore because we caused them in the TutorialRunner
-      if (!this._ignoreFileEvents.decrement(filePath)) {
+      if (!editorPath) {
+        return;
+      }
+
+      if (!this._ignoreFileEvents.decrement(editorPath)) {
         return;
       }
 
       if (
         Array.isArray(this._watchContentFromWebContainer) &&
-        !this._watchContentFromWebContainer.some((pattern) => picomatch.isMatch(filePath, pattern))
+        !this._watchContentFromWebContainer.some((pattern) => picomatch.isMatch(editorPath, pattern))
       ) {
         return;
       }
 
       if (eventType === 'change') {
-        /**
-         * Update file
-         * we ignore all paths that aren't exposed in the `_editorStore`
-         */
-        const file = this._editorStore.documents.get()[filePath];
+        const file = this._editorStore.documents.get()[editorPath];
 
         if (!file) {
           return;
         }
 
-        scheduleReadFor(filePath, typeof file.value === 'string' ? 'utf-8' : null);
+        scheduleReadFor(editorPath, typeof file.value === 'string' ? 'utf-8' : null);
       } else if (eventType === 'rename' && Array.isArray(this._watchContentFromWebContainer)) {
-        const file = this._editorStore.documents.get()[filePath];
+        const file = this._editorStore.documents.get()[editorPath];
 
         if (file) {
-          // remove file
-          this._editorStore.deleteFile(filePath);
+          this._editorStore.deleteFile(editorPath);
         } else {
-          // add file
-          const segments = filePath.split('/');
+          const segments = editorPath.split('/');
           segments.forEach((_, index) => {
             if (index == segments.length - 1) {
               return;
@@ -695,12 +608,12 @@ export class TutorialRunner {
             }
           });
 
-          if (!this._editorStore.documents.get()[filePath]) {
-            this._editorStore.addFileOrFolder({ path: filePath, type: 'file' });
+          if (!this._editorStore.documents.get()[editorPath]) {
+            this._editorStore.addFileOrFolder({ path: editorPath, type: 'file' });
           }
 
-          this._updateCurrentFiles({ [filePath]: '' });
-          scheduleReadFor(filePath, 'utf-8');
+          this._updateCurrentFiles({ [editorPath]: '' });
+          scheduleReadFor(editorPath, 'utf-8');
         }
       }
     });
@@ -743,13 +656,7 @@ function commandsToList(commands: Commands | CommandsSchema) {
 
   return commandsToList(new Commands(commands));
 }
-
-async function updateFiles(webcontainer: WebContainer, previousFiles: Files, newFiles: Files) {
-  const { removed, addedOrModified } = diffFiles(previousFiles, newFiles);
-
-  for (const filePath of removed) {
-    await webcontainer.fs.rm(filePath, { force: true });
-  }
-
-  await webcontainer.mount(toFileTree(addedOrModified));
-}
+// `commandsToList` is the only helper used outside the class above -- the
+// earlier local `updateFiles` and `diffFiles` copies were dropped in
+// favour of the versions exported from `webcontainer/utils/files.ts`.
+export type { RuntimeProcess };

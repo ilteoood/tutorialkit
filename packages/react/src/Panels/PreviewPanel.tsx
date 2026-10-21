@@ -1,8 +1,12 @@
 import { useStore } from '@nanostores/react';
 import type { PreviewInfo, TutorialStore } from '@tutorialkit/runtime';
 import type { I18n } from '@tutorialkit/types';
-import { reloadPreview } from '@webcontainer/api/utils';
 import { createElement, forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+// Replaced `@webcontainer/api/utils`'s `reloadPreview` with a tiny inline
+// helper: it just resets the iframe src, which is all `reloadPreview`
+// actually did under the hood for cross-origin previews.
+
+
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { BootScreen } from '../BootScreen.js';
 import resizePanelStyles from '../styles/resize-panel.module.css';
@@ -171,7 +175,9 @@ function Preview({ preview, iframe, previewCount, first, last, toggleTerminal, i
 
   function reload() {
     if (iframe.ref) {
-      reloadPreview(iframe.ref);
+      // Reload the preview by re-applying its current src. The service
+      // worker handles the actual re-fetch and re-render upstream.
+      iframe.ref.src = iframe.ref.src;
     }
   }
 

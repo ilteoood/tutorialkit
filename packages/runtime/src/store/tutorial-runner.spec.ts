@@ -1,26 +1,27 @@
 // must be imported first
-import { resetProcessFactory, setProcessFactory } from '@tutorialkit/test-utils';
+import { mockNodepod, resetProcessFactory, setProcessFactory } from '@tutorialkit/test-utils';
+import type { MockedNodepod } from '@tutorialkit/test-utils';
+import { vi } from 'vitest';
+vi.mock('@r1ck404/nodepod', () => mockNodepod());
 
-import type { MockedWebContainer } from '@tutorialkit/test-utils';
-import { WebContainer } from '@webcontainer/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { Nodepod } from '@r1ck404/nodepod';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { withResolvers } from '../utils/promises.js';
 import { StepsController } from '../webcontainer/steps.js';
 import { EditorStore } from './editor.js';
 import { TerminalStore } from './terminal.js';
 import { TutorialRunner } from './tutorial-runner.js';
-
 beforeEach(() => {
   resetProcessFactory();
 });
 
 describe('TutorialRunner', () => {
-  test('prepareFiles should mount files to WebContainer', async () => {
-    const webcontainer = WebContainer.boot();
-    const mock = (await webcontainer) as MockedWebContainer;
+  test('prepareFiles should write files into Nodepod', async () => {
+    const nodepod = Nodepod.boot();
+    const mock = (await nodepod) as MockedNodepod;
     const runner = new TutorialRunner(
-      webcontainer,
-      new TerminalStore(webcontainer, false),
+      nodepod,
+      new TerminalStore(nodepod),
       new EditorStore(),
       new StepsController(),
     );
@@ -35,34 +36,43 @@ describe('TutorialRunner', () => {
       },
     });
 
-    expect(mock._fakeFs).toMatchInlineSnapshot(`
-      {
-        "package.json": {
-          "file": {
-            "contents": "{ "name": "my-project" }",
-          },
-        },
-        "src": {
+    const fs = JSON.stringify(mock._fakeFs, undefined, 2);
+    expect(fs).toMatchInlineSnapshot(`
+      "{
+        "home": {
           "directory": {
-            "index.html": {
-              "file": {
-                "contents": "<h1>Hello, world!</h1>",
-              },
-            },
-            "index.js": {
-              "file": {
-                "contents": "console.log("Hello, world!")",
-              },
-            },
-          },
-        },
-      }
+            "tutorial": {
+              "directory": {
+                "package.json": {
+                  "file": {
+                    "contents": "{ \\"name\\": \\"my-project\\" }"
+                  }
+                },
+                "src": {
+                  "directory": {
+                    "index.js": {
+                      "file": {
+                        "contents": "console.log(\\"Hello, world!\\")"
+                      }
+                    },
+                    "index.html": {
+                      "file": {
+                        "contents": "<h1>Hello, world!</h1>"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }"
     `);
   });
 
   test('runCommands should execute commands only after load has completed', async () => {
-    const webcontainer = WebContainer.boot();
-    const mock = (await webcontainer) as MockedWebContainer;
+    const nodepod = Nodepod.boot();
+    const mock = (await nodepod) as MockedNodepod;
 
     const { promise: runCommandPromise, resolve } = withResolvers();
 
@@ -79,8 +89,8 @@ describe('TutorialRunner', () => {
     setProcessFactory(processFactory);
 
     const runner = new TutorialRunner(
-      webcontainer,
-      new TerminalStore(webcontainer, false),
+      nodepod,
+      new TerminalStore(nodepod),
       new EditorStore(),
       new StepsController(),
     );
@@ -106,21 +116,29 @@ describe('TutorialRunner', () => {
     expect(processFactory).toHaveBeenCalledTimes(1);
     expect(fs).toMatchInlineSnapshot(`
       "{
-        "package.json": {
-          "file": {
-            "contents": "{ \\"name\\": \\"my-project\\" }"
-          }
-        },
-        "src": {
+        "home": {
           "directory": {
-            "index.js": {
-              "file": {
-                "contents": "console.log(\\"Hello, world!\\")"
-              }
-            },
-            "index.html": {
-              "file": {
-                "contents": "<h1>Hello, world!</h1>"
+            "tutorial": {
+              "directory": {
+                "package.json": {
+                  "file": {
+                    "contents": "{ \\"name\\": \\"my-project\\" }"
+                  }
+                },
+                "src": {
+                  "directory": {
+                    "index.js": {
+                      "file": {
+                        "contents": "console.log(\\"Hello, world!\\")"
+                      }
+                    },
+                    "index.html": {
+                      "file": {
+                        "contents": "<h1>Hello, world!</h1>"
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -135,9 +153,6 @@ describe('TutorialRunner', () => {
             "command",
           ],
           "command": "some",
-          "options": {
-            "terminal": undefined,
-          },
         },
       ]
     `);

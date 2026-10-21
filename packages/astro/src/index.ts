@@ -29,37 +29,16 @@ export interface Options {
 
   /**
    * The value of the Cross-Origin-Embedder-Policy header for the dev server.
-   * This is required for webcontainer to works.
+   * This is required for Nodepod's service worker and SharedArrayBuffer.
    *
    * Using credentialless lets you embed images from third party more easily.
    * However only Firefox and Chrome supports credentialless.
    *
-   * @see https://webcontainers.io/guides/configuring-headers
+   * @see https://r1ck404.github.io/Nodepod/docs/concepts/security/
    *
    * @default 'require-corp'
    */
   isolation?: 'require-corp' | 'credentialless';
-
-  /**
-   * Configuration options when using the Enterprise
-   * version of WebContainer API.
-   */
-  enterprise?: {
-    /**
-     * The StackBlitz editor origin.
-     */
-    editorOrigin: string;
-
-    /**
-     * The client id.
-     */
-    clientId: string;
-
-    /**
-     * The OAuth scope.
-     */
-    scope: string;
-  };
 
   /**
    * Expressive code plugins.
@@ -82,7 +61,6 @@ export default function createPlugin({
   defaultRoutes = true,
   components,
   isolation,
-  enterprise,
   expressiveCodePlugins = [],
   expressiveCodeThemes,
 }: Options = {}): AstroIntegration {
@@ -111,17 +89,10 @@ export default function createPlugin({
                 : [
                     '@tutorialkit/react',
 
-                    /**
-                     * The `picomatch` is CJS dependency used by `@tutorialkit/runtime`.
-                     * When used via `@tutorialkit/astro`, it's a transitive dependency that's
-                     * not automatically transformed.
-                     */
-                    '@tutorialkit/astro > picomatch/posix.js',
+// Nothing else needs pre-bundling now; picomatch is a
+// runtime-only dep and gets resolved lazily, while
+// everything heavier (nodepod, jszip) is hoisted.
                   ],
-            },
-            define: {
-              __ENTERPRISE__: `${!!enterprise}`,
-              __WC_CONFIG__: enterprise ? JSON.stringify(enterprise) : 'undefined',
             },
             ssr: {
               noExternal: ['@tutorialkit/astro', '@tutorialkit/react'],

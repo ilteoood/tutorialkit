@@ -1,12 +1,16 @@
 import type { PreviewSchema } from '@tutorialkit/types';
-import type { WebContainer } from '@webcontainer/api';
+import type { Nodepod } from '@r1ck404/nodepod';
 import { atom } from 'nanostores';
 import { PortInfo } from '../webcontainer/port-info.js';
 import { PreviewInfo } from '../webcontainer/preview-info.js';
 
+const PREVIEW_POLL_INTERVAL_MS = 750;
+
 export class PreviewsStore {
   private _availablePreviews = new Map<number, PortInfo>();
   private _previewsLayout: PreviewInfo[] = [];
+  private _pollHandle: ReturnType<typeof setInterval> | undefined;
+  private _pollIntervalMs: number = PREVIEW_POLL_INTERVAL_MS;
 
   /**
    * Atom representing the current previews. If it's an empty array or none of
@@ -14,32 +18,62 @@ export class PreviewsStore {
    */
   previews = atom<PreviewInfo[]>([]);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this._init(webcontainerPromise);
+  constructor(nodepod: Promise<Nodepod>, options: { pollIntervalMs?: number } = {}) {
+    this._pollIntervalMs = options.pollIntervalMs ?? PREVIEW_POLL_INTERVAL_MS;
+    this._init(nodepod);
   }
 
-  private async _init(webcontainerPromise: Promise<WebContainer>) {
-    const webcontainer = await webcontainerPromise;
+  /**
+   * Nodepod doesn't expose a "port ready" event the way `@webcontainer/api`
+   * did, so we poll `nodepod.port(p)` for every configured port and reflect
+   * whatever we find back into the previews atom.
+   */
+  private async _init(nodepodPromise: Promise<Nodepod>) {
+    const nodepod = await nodepodPromise;
 
-    webcontainer.on('port', (port, type, url) => {
-      let portInfo = this._availablePreviews.get(port);
+    this._pollHandle = setInterval(() => {
+      this._refreshPreviews(nodepod);
+    }, this._pollIntervalMs);
+  }
 
-      if (!portInfo) {
-        portInfo = new PortInfo(port, url, type === 'open');
+  private _refreshPreviews(nodepod: Nodepod) {
+    if (this._availablePreviews.size === 0) {
+      return;
+    }
 
-        this._availablePreviews.set(port, portInfo);
-      }
+    let didChange = false;
 
-      portInfo.ready = type === 'open';
+    for (const [port, portInfo] of this._availablePreviews) {
+      const url = nodepod.port(port) ?? undefined;
+      const wasReady = portInfo.ready;
+
       portInfo.origin = url;
+      portInfo.ready = typeof url === 'string';
 
-      if (this._previewsLayout.length === 0) {
-        this.previews.set([new PreviewInfo({}, portInfo)]);
-      } else {
-        this._previewsLayout = [...this._previewsLayout];
-        this.previews.set(this._previewsLayout);
+      if (wasReady !== portInfo.ready) {
+        didChange = true;
       }
-    });
+    }
+
+    if (!didChange) {
+      return;
+    }
+
+    if (this._previewsLayout.length === 0) {
+      const first = this._availablePreviews.values().next().value as PortInfo | undefined;
+      this.previews.set(first ? [new PreviewInfo({}, first)] : []);
+      return;
+    }
+
+    this._previewsLayout = [...this._previewsLayout];
+    this.previews.set(this._previewsLayout);
+  }
+
+  dispose() {
+    if (this._pollHandle) {
+      clearInterval(this._pollHandle);
+      this._pollHandle = undefined;
+    }
   }
 
   /**
@@ -48,13 +82,11 @@ export class PreviewsStore {
    */
   setPreviews(config: PreviewSchema) {
     if (config === false) {
-      // clear the previews if they are turned off
       this.previews.set([]);
 
       return;
     }
 
-    // if the schema is `true`, we just use the default empty array
     const previews = config === true ? [] : (config ?? []);
 
     const previewInfos = previews.map((previewConfig) => {

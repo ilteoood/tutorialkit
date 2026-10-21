@@ -33,12 +33,13 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@r1ck404/nodepod": "^1.11.2",
     "@tutorialkit/types": "workspace:*",
-    "@webcontainer/api": "1.5.1",
     "nanostores": "^0.10.3",
     "picomatch": "^4.0.2"
   },
   "devDependencies": {
+    "@tutorialkit/test-utils": "workspace:*",
     "@types/picomatch": "^3.0.1",
     "typescript": "^5.4.5",
     "vite": "^5.3.1",

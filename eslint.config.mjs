@@ -18,9 +18,8 @@ export default [
     ts: {
       namingConvention: {
         variable: {
-          exceptions: ['Content', '__ENTERPRISE__', '__WC_CONFIG__', 'WebContainer'],
+          exceptions: ['Content'],
         },
-      },
     },
   }),
   ...eslintPluginAstro.configs.recommended,
