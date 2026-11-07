@@ -45,14 +45,17 @@ const fastify = Fastify({
 
 ## Try it
 
-In the **Terminal** panel:
+Stop the server in the **Terminal** panel with `Ctrl` + `C`, then start it again with a different host:
 
 ```bash
-PORT=4000 npm start
+HOST=0.0.0.0 npm start
 ```
 
-The server now listens on port 4000.
+The server now listens on every network interface. The preview panel keeps working, because the port did not change.
 
+:::tip
+`PORT=4000 npm start` moves the server to another port. The preview panel is set to port 3000, so it would have nothing to show.
+:::
 ## What you still need for a real deployment
 
 - A process manager. A server that crashes stays crashed. Use systemd, Docker, or a platform that restarts it for you.
