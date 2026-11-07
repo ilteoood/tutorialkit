@@ -1,28 +1,26 @@
 import tutorialStore from 'tutorialkit:store';
-import { webcontainer } from 'tutorialkit:core';
+import { runtime } from 'tutorialkit:core';
 
 interface Props {
   filePath: string;
   newContent: string;
 
   // default to 'store'
-  access?: 'store' | 'webcontainer';
+  access?: 'store' | 'runtime';
   testId?: string;
 }
 
 export function ButtonWriteToFile({ filePath, newContent, access = 'store', testId = 'write-to-file' }: Props) {
   async function writeFile() {
     switch (access) {
-      case 'webcontainer': {
-        const webcontainerInstance = await webcontainer;
-
+      case 'runtime': {
         const folderPath = filePath.split('/').slice(0, -1).join('/');
 
         if (folderPath) {
-          await webcontainerInstance.fs.mkdir(folderPath, { recursive: true });
+          await runtime.mkdir(folderPath, { recursive: true });
         }
 
-        await webcontainerInstance.fs.writeFile(filePath, newContent);
+        await runtime.writeFile(filePath, newContent);
 
         return;
       }
