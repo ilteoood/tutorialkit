@@ -63,7 +63,7 @@ jobs:
         run: |
           pnpm run docs:build
           pnpm run demo:build
-
+          pnpm run fastify-tutorial:build
   extension:
     name: VSCode Extension
     runs-on: ubuntu-latest

@@ -15,6 +15,8 @@
     "docs:build": "pnpm run build && pnpm run --filter=tutorialkit.dev build",
     "demo": "pnpm run --filter=demo.tutorialkit.dev dev",
     "demo:build": "pnpm run build && pnpm run --filter=demo.tutorialkit.dev build",
+    "fastify-tutorial": "pnpm run --filter=fastify.tutorialkit.dev dev",
+    "fastify-tutorial:build": "pnpm run build && pnpm run --filter=fastify.tutorialkit.dev build",
     "lint": "eslint \"{packages,docs,extensions,integration}/**/*\"",
     "test": "pnpm run --stream --filter='@tutorialkit/*' test --run",
     "test:e2e": "pnpm run --filter='./e2e' test"
