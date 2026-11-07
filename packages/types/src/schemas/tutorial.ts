@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { webcontainerSchema } from './common.js';
+import { lessonRuntimeSchema } from './common.js';
 
-export const tutorialSchema = webcontainerSchema.extend({
+export const tutorialSchema = lessonRuntimeSchema.extend({
   type: z.literal('tutorial'),
   logoLink: z.string().optional(),
   parts: z

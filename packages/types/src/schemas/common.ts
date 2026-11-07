@@ -10,7 +10,7 @@ export const commandSchema = z.union([
   z.tuple([z.string(), z.string()]),
 
   z.strictObject({
-    command: z.string().describe('Command to execute in WebContainer.'),
+    command: z.string().describe('Command to execute in the lesson runtime.'),
     title: z.string().describe('Title to show for this step in the Prepare Environment section.'),
   }),
 ]);
@@ -23,7 +23,7 @@ export const commandsSchema = z.object({
     .array()
     .optional()
     .describe(
-      'List of commands to be executed to prepare the environment in WebContainer. Each command executed and its status will be shown in the Prepare Environment section.',
+      'List of commands to be executed to prepare the environment in the lesson runtime. Each command executed and its status will be shown in the Prepare Environment section.',
     ),
 });
 
@@ -60,7 +60,7 @@ export const fileSystemSchema = z.object({
   watch: z
     .union([z.boolean(), z.array(z.string())])
     .describe(
-      'When set to true, file changes in WebContainer are updated in the editor as well. When set to an array, file changes or new files in the matching paths are updated in the editor.',
+      'When set to true, file changes in the lesson runtime are updated in the editor as well. When set to an array, file changes or new files in the matching paths are updated in the editor.',
     )
     .optional(),
 });
@@ -70,16 +70,6 @@ export type FileSystemSchema = z.infer<typeof fileSystemSchema>;
 const panelTypeSchema = z
   .union([z.literal('output'), z.literal('terminal')])
   .describe(`The type of the terminal which can either be 'output' or 'terminal'.`);
-
-const allowRedirectsSchema = z
-  .boolean()
-  .optional()
-  .describe("Set to `true` if you want to enable output redirects in the terminal. It's disabled by default.");
-
-const allowCommandsSchema = z
-  .array(z.string())
-  .optional()
-  .describe('List of command that are allowed in the terminal, if not provided, all commands are allowed.');
 
 export const terminalSchema = z.union([
   // `false` if you want to disable the terminal entirely
@@ -129,12 +119,6 @@ export const terminalSchema = z.union([
 
               // the title of the panel which is shown in the tab
               title: z.string().optional().describe('The title of the panel which is shown in the tab.'),
-
-              // `true` if you want to enable output redirects in the terminal, disabled by default
-              allowRedirects: allowRedirectsSchema,
-
-              // list of command that are allowed in the terminal, if not provided, all commands are allowed
-              allowCommands: allowCommandsSchema,
             }),
           ]),
         )
@@ -164,12 +148,6 @@ export const terminalSchema = z.union([
         ),
     ]),
     activePanel: z.number().gte(0).optional().describe('Defines which panel should be visible by default.'),
-
-    // `true` if you want to enable output redirects in the terminal, disabled by default
-    allowRedirects: allowRedirectsSchema,
-
-    // list of command that are allowed in the terminal, if not provided, all commands are allowed
-    allowCommands: allowCommandsSchema,
   }),
 ]);
 
@@ -212,7 +190,7 @@ export type TerminalSchema = z.infer<typeof terminalSchema>;
 export type EditorSchema = z.infer<typeof editorSchema>;
 export type CustomSchema = z.infer<typeof customSchema>;
 
-export const webcontainerSchema = commandsSchema.extend({
+export const lessonRuntimeSchema = commandsSchema.extend({
   meta: metaTagsSchema.optional().describe('Configures `<meta>` tags for Open Graph protocole and Twitter.'),
 
   custom: customSchema.optional().describe('Assign custom fields to a chapter/part/lesson in the Astro collection'),
@@ -305,7 +283,7 @@ export const webcontainerSchema = commandsSchema.extend({
     .describe('Display a button for downloading the current lesson as `.zip` file.'),
 });
 
-export const baseSchema = webcontainerSchema.extend({
+export const baseSchema = lessonRuntimeSchema.extend({
   title: z.string().describe('The title of the part, chapter, or lesson.'),
   slug: z
     .string()
