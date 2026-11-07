@@ -1,7 +1,7 @@
 import type { CommandsSchema, Files } from '@tutorialkit/types';
 import type { Process } from 'openvessel';
 import picomatch from 'picomatch/posix.js';
-import { newTask, type Task, type TaskCancelled } from '../tasks.js';
+import { AbortError, newTask, type Task, type TaskCancelled } from '../tasks.js';
 import { MultiCounter } from '../utils/multi-counter.js';
 import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
 import { Command, Commands } from '../vessel/command.js';
@@ -61,6 +61,7 @@ export class TutorialRunner {
   private _currentLoadTask: Task<void | TaskCancelled> | undefined = undefined;
   private _currentProcessTask: Task<void | TaskCancelled> | undefined = undefined;
   private _currentCommandProcess: Process | undefined = undefined;
+  private _mainCommandProcess: Process | undefined = undefined;
   private _currentTemplate: Files | undefined = undefined;
   private _currentFiles: Files | undefined = undefined;
   private _currentRunCommands: Commands | undefined = undefined;
@@ -72,6 +73,8 @@ export class TutorialRunner {
 
   private _packageJsonDirty = false;
   private _commandsChanged = false;
+  private _mountedFilesChanged = false;
+  private _restartingMainCommand = false;
 
   // this strongly assumes that there's a single package json which might not be true
   private _packageJsonContent = '';
@@ -255,8 +258,15 @@ export class TutorialRunner {
 
         signal.throwIfAborted();
 
+        this._mountedFilesChanged = false;
+
+        let mountedFilesChanged = false;
+
         if (this._currentFiles || this._currentTemplate) {
-          await this._updateFiles({ ...this._currentTemplate, ...this._currentFiles }, { ...template, ...files });
+          mountedFilesChanged = await this._updateFiles(
+            { ...this._currentTemplate, ...this._currentFiles },
+            { ...template, ...files },
+          );
         } else {
           await this._runtime.mount({ ...template, ...files });
         }
@@ -265,6 +275,8 @@ export class TutorialRunner {
         this._currentFiles = { ...files };
 
         this._updateDirtyState({ ...template, ...files });
+
+        this._mountedFilesChanged = mountedFilesChanged;
       },
       { ignoreCancel: true, signal },
     );
@@ -310,9 +322,20 @@ export class TutorialRunner {
 
         signal.throwIfAborted();
 
+        const mountedFilesChanged = this._mountedFilesChanged;
+        this._mountedFilesChanged = false;
+
         const anyChange = this._packageJsonDirty || commandsChanged;
 
         if (!anyChange) {
+          if (mountedFilesChanged) {
+            const restarted = await this._restartMainCommand(newCommands, previousTask, signal);
+
+            if (restarted) {
+              return undefined;
+            }
+          }
+
           /**
            * If there are no changes and we have a previous task, then
            * we must link this new task to that previous one, otherwise
@@ -467,6 +490,10 @@ export class TutorialRunner {
 
         this._currentCommandProcess = await this._newProcess(output, command.shellCommand);
 
+        if (isMainCommand) {
+          this._mainCommandProcess = this._currentCommandProcess;
+        }
+
         try {
           signal.throwIfAborted();
         } catch (error) {
@@ -482,6 +509,10 @@ export class TutorialRunner {
         }
 
         const exitCode = await this._currentCommandProcess.exit;
+
+        if (this._restartingMainCommand) {
+          break;
+        }
 
         if (exitCode !== 0) {
           this._stepController.updateStep(index, {
@@ -526,7 +557,74 @@ export class TutorialRunner {
       void this._setupWatcher();
     } finally {
       signal.removeEventListener('abort', abortListener);
+
+      this._mainCommandProcess = undefined;
     }
+  }
+
+  /**
+   * Restarts the main command so that the running application is instantiated
+   * again from scratch and picks up the files that are currently mounted.
+   *
+   * @returns `true` when the main command has been restarted.
+   */
+  private async _restartMainCommand(
+    commands: Commands,
+    previousTask: Task<void | TaskCancelled> | undefined,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    const mainCommand = commands.mainCommand;
+    const runningProcess = this._mainCommandProcess;
+
+    if (!mainCommand || !mainCommand.isRunnable() || !runningProcess) {
+      return false;
+    }
+
+    this._restartingMainCommand = true;
+
+    try {
+      await runningProcess.kill().catch(() => undefined);
+      this._currentCommandProcess = undefined;
+
+      await runningProcess.exit;
+      await previousTask?.promise;
+    } finally {
+      this._restartingMainCommand = false;
+    }
+
+    signal.throwIfAborted();
+
+    const output = this._terminalStore.getOutputPanel();
+    const abortListener = () => this._currentCommandProcess?.kill();
+    signal.addEventListener('abort', abortListener, { once: true });
+
+    try {
+      const restartedProcess = await this._newProcess(output, mainCommand.shellCommand);
+
+      this._currentCommandProcess = restartedProcess;
+      this._mainCommandProcess = restartedProcess;
+
+      if (signal.aborted) {
+        await restartedProcess.kill().catch(() => undefined);
+
+        throw new AbortError();
+      }
+
+      const exitCode = await restartedProcess.exit;
+
+      if (!this._restartingMainCommand) {
+        this._stepController.updateStep([...commands].length - 1, {
+          title: mainCommand.title,
+          status: exitCode !== 0 ? 'failed' : 'completed',
+        });
+      }
+
+      signal.throwIfAborted();
+    } finally {
+      signal.removeEventListener('abort', abortListener);
+    }
+
+    return true;
   }
 
   private async _newProcess(output: ITerminal | undefined, shellCommand: string) {
@@ -697,6 +795,8 @@ export class TutorialRunner {
     }
 
     await this._runtime.mount(addedOrModified);
+
+    return removed.length > 0 || Object.keys(addedOrModified).length > 0;
   }
 
   private _clearDirtyState() {
