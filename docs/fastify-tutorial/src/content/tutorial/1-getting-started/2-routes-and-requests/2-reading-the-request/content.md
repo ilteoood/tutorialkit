@@ -10,7 +10,8 @@ Every handler receives the same `request` object. It is your window into what th
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## The useful parts of `request`
 

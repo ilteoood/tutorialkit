@@ -16,7 +16,8 @@ After that line, `fastify.tasks` is the map you created, and every handler and p
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Decorating the server
 

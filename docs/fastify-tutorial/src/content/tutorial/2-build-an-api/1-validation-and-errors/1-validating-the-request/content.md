@@ -12,7 +12,8 @@ Fastify validates for you. You describe the shape of the data you expect with a 
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Where a schema goes
 

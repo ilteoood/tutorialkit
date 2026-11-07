@@ -40,9 +40,11 @@ fastify.register(taskRoutes, { prefix: '/api' });
 
 ## The files
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
-```file:/src/routes/tasks.js```
+```file:/src/routes/tasks.js
+```
 
 ## Try it
 
@@ -61,7 +63,14 @@ If you want a plugin to share everything with its parent, wrap it with `fastify-
 import fastifyPlugin from 'fastify-plugin';
 
 export default fastifyPlugin(async function taskRoutes(fastify) {
-  fastify.get('/tasks', async () => ({ tasks: [] }));
+  fastify.get('/tasks', async () => {
+    return { tasks: [] };
+  });
+
+  fastify.post('/tasks', async (request, reply) => {
+    reply.code(201);
+    return { title: request.body?.title };
+  });
 });
 ```
 

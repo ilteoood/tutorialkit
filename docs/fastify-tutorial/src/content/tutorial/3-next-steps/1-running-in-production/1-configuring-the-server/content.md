@@ -10,7 +10,8 @@ The server you have been building listens on `localhost`, which means only your 
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## The three changes
 

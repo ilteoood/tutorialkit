@@ -29,7 +29,8 @@ async function buildTestApp(t) {
 
 ## The test file
 
-```file:/test/tasks.test.js```
+```file:/test/tasks.test.js
+```
 
 ## Try it
 

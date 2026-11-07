@@ -24,17 +24,22 @@ To test the app, we need to be able to build it without starting it. So we split
 - `src/app.js` builds and returns the Fastify instance.
 - `src/server.js` builds it and listens on the port.
 
-```file:/src/app.js```
+```file:/src/app.js
+```
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
-```file:/src/routes/tasks.js```
+```file:/src/routes/tasks.js
+```
 
-```file:/src/store/tasks.js```
+```file:/src/store/tasks.js
+```
 
 ## The test file
 
-```file:/test/tasks.test.js```
+```file:/test/tasks.test.js
+```
 
 Node.js has a test runner built in, so there is nothing to install. The `test` script in `package.json` runs your test file:
 

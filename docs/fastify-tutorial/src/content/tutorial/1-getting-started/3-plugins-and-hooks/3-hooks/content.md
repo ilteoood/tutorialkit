@@ -29,7 +29,8 @@ fastify.addHook('onRequest', async (request, reply) => {
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Reading the code
 

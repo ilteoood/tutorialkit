@@ -25,7 +25,8 @@ Fastify builds a serializer from this schema and uses it to write the JSON. Fiel
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Why bother?
 

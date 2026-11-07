@@ -10,9 +10,11 @@ Our API needs somewhere to keep the tasks. In a real project that would be a dat
 
 ## The files
 
-```file:/src/store/tasks.js```
+```file:/src/store/tasks.js
+```
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Reading the store
 

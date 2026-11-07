@@ -10,9 +10,11 @@ Now the routes have something real to talk about.
 
 ## The files
 
-```file:/src/routes/tasks.js```
+```file:/src/routes/tasks.js
+```
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## Reading the routes
 

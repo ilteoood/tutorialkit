@@ -18,7 +18,8 @@ Calling `GET /tasks/42` gives you `request.params.id === '42'`.
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## The rules
 

@@ -20,7 +20,8 @@ Fastify gives you one function per HTTP method:
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## How a route is built
 

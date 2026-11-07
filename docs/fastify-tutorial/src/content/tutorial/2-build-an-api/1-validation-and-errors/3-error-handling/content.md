@@ -12,7 +12,8 @@ Fastify handles both for you, and lets you replace what it sends.
 
 ## The code
 
-```file:/src/server.js```
+```file:/src/server.js
+```
 
 ## The error handler
 
