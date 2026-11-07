@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const BASE_URL = '/tests/filesystem';
 
-test('editor should reflect changes made from webcontainer', async ({ page }) => {
+test('editor should reflect changes made from the lesson runtime', async ({ page }) => {
   const testCase = 'watch';
   await page.goto(`${BASE_URL}/${testCase}`);
 
@@ -17,7 +17,7 @@ test('editor should reflect changes made from webcontainer', async ({ page }) =>
   });
 });
 
-test('editor should reflect changes made from webcontainer in file in nested folder and not add new files', async ({ page }) => {
+test('editor should reflect changes made from the lesson runtime in file in nested folder and not add new files', async ({ page }) => {
   const testCase = 'watch';
   await page.goto(`${BASE_URL}/${testCase}`);
 
@@ -42,7 +42,7 @@ test('editor should reflect changes made from webcontainer in file in nested fol
   await expect(page.getByRole('button', { name: 'bar.txt' })).toBeVisible();
 });
 
-test('editor should reflect changes made from webcontainer in specified paths', async ({ page }) => {
+test('editor should reflect changes made from the lesson runtime in specified paths', async ({ page }) => {
   const testCase = 'watch-glob';
   await page.goto(`${BASE_URL}/${testCase}`);
 
@@ -57,7 +57,7 @@ test('editor should reflect changes made from webcontainer in specified paths', 
   });
 });
 
-test('editor should reflect new files added in specified paths in webcontainer', async ({ page }) => {
+test('editor should reflect new files added in specified paths in the lesson runtime', async ({ page }) => {
   const testCase = 'watch-glob';
   await page.goto(`${BASE_URL}/${testCase}`);
 
@@ -75,7 +75,7 @@ test('editor should reflect new files added in specified paths in webcontainer',
   });
 });
 
-test('editor should remove deleted files in specified paths in webcontainer', async ({ page }) => {
+test('editor should remove deleted files in specified paths in the lesson runtime', async ({ page }) => {
   const testCase = 'watch-glob';
   await page.goto(`${BASE_URL}/${testCase}`);
 
@@ -86,7 +86,7 @@ test('editor should remove deleted files in specified paths in webcontainer', as
   }).toPass();
 });
 
-test('editor should not reflect changes made from webcontainer if watch is not set', async ({ page }) => {
+test('editor should not reflect changes made from the lesson runtime if watch is not set', async ({ page }) => {
   const testCase = 'no-watch';
   await page.goto(`${BASE_URL}/${testCase}`);
 

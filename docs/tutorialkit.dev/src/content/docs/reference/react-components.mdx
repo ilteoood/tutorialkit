@@ -18,9 +18,9 @@ import sourceExampleSimpleEditor from '@components/react-examples/ExampleSimpleE
 import sourceExampleFileTree from '@components/react-examples/ExampleFileTree?raw';
 import sourceExampleCodeMirrorEditor from '@components/react-examples/ExampleCodeMirrorEditor?raw';
 import sourceExampleTerminal from '@components/react-examples/ExampleTerminal?raw';
-import sourceUseWebcontainer from "@components/react-examples/hooks/useWebcontainer?raw";
+import sourceUseLessonRuntime from "@components/react-examples/hooks/useLessonRuntime?raw";
 
-You can reuse TutorialKit's React components in your own applications. They are designed to work well with the [WebContainer API][webcontainers].
+You can reuse TutorialKit's React components in your own applications. They are designed to work well with the [OpenVessel runtime][openvessel].
 
 :::note
 Using `@tutorialkit/react` package directly without `@tutorialkit/astro` is **experimental** at the moment.
@@ -90,8 +90,8 @@ These examples have references to the following files:
     <Code code={"export function useTheme() {\n  return 'light';\n}"} lang="ts" class="limit-code-height" />
   </TabItem>
 
-  <TabItem label="hooks/useWebcontainer.ts">
-    <Code code={sourceUseWebcontainer} lang="ts" class="limit-code-height" />
+  <TabItem label="hooks/useLessonRuntime.ts">
+    <Code code={sourceUseLessonRuntime} lang="ts" class="limit-code-height" />
   </TabItem>
 </Tabs>
 
@@ -188,12 +188,12 @@ A component to interact with a terminal using [xterm.js](https://xtermjs.org/). 
 
 * `onTerminalReady?: (terminal: Terminal) => void` - A callback that will be called when the terminal is ready. The `Terminal` instance from `xterm` will be provided as an argument.
 
-* `onTerminalResize?: (cols: number, rows: number) => void` - A callback that will be called when the terminal is resized. The number of columns and rows will be provided as arguments. This is typically used to send a `SIGWINCH` signal to the running webcontainer process that is connected to the terminal.
+* `onTerminalResize?: (cols: number, rows: number) => void` - A callback that will be called when the terminal is resized. The number of columns and rows will be provided as arguments. This is typically used to send a `SIGWINCH` signal to the running lesson runtime process that is connected to the terminal.
 
 * `theme: 'dark' | 'light'` - The theme to use for the editor. Two values are available: `light` and `dark`.
 
 * `className?: string` - A class name to apply to the root element of the component.
 
 
-[webcontainers]: https://webcontainers.io
+[openvessel]: https://github.com/kobesoft-labs/openvessel
 [stackblitz-example]: https://stackblitz.com/edit/tutorialkit-react-components

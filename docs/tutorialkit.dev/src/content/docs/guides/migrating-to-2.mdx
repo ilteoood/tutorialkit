@@ -1,0 +1,14 @@
+---
+title: Migrating to TutorialKit 2.0
+description: What changes when a TutorialKit project moves from WebContainer to the OpenVessel runtime.
+---
+
+TutorialKit 2.0 replaces the WebContainer API with the [OpenVessel runtime](https://github.com/kobesoft-labs/openvessel). The upgrade is not automatic: it rewrites the `tutorialkit:core` export, removes the enterprise login flow, and deletes two lesson options.
+
+The full checklist, with every breaking change and the code that replaces it, lives in [`MIGRATION.md`](https://github.com/ilteoood/tutorialkit/blob/main/MIGRATION.md) at the root of the repository. It is the single source of truth for this upgrade and this page does not restate it.
+
+## What to expect
+
+The runtime and the preview assets now ship with your site under `/ov/runtime/` and `/ov/preview/`, so the only origin involved is your own. The lesson still runs Node.js 26.13.0 in a real POSIX shell, but through a runtime served by your build instead of a third-party iframe.
+
+If you only build lessons, nothing changes: the lesson config keys and the content format are the same. If you wrote a custom component against `tutorialkit:core`, against the terminal options, or against the enterprise login, read `MIGRATION.md` before upgrading.

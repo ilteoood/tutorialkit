@@ -3,9 +3,9 @@ import type { Lesson } from './entities/index.js';
 export const DEFAULT_LOCALIZATION = {
   partTemplate: 'Part ${index}: ${title}',
   noPreviewNorStepsText: 'No preview to run nor steps to show',
-  startWebContainerText: 'Run this tutorial',
+  startRuntimeText: 'Run this tutorial',
   editPageText: 'Edit this page',
-  webcontainerLinkText: 'Powered by WebContainers',
+  runtimeLinkText: 'Powered by OpenVessel',
   filesTitleText: 'Files',
   fileTreeCreateFileText: 'Create file',
   fileTreeCreateFolderText: 'Create folder',

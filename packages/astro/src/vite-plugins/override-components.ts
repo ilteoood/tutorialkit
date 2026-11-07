@@ -35,7 +35,6 @@ export interface OverrideComponentsOptions {
    *   - `logo`: Logo of the application
    *   - `open-in-stackblitz-link`: Link for opening current lesson in StackBlitz
    *   - `theme-switch`:  Switch for changing the theme
-   *   - `login-button`: For StackBlitz Enterprise user, the login button
    *
    * Usage:
    *
@@ -43,7 +42,6 @@ export interface OverrideComponentsOptions {
    *   <slot name="logo" />
    *   <slot name="open-in-stackblitz-link" />
    *   <slot name="theme-switch" />
-   *   <slot name="login-button" />
    * ```
    */
   TopBar?: string;

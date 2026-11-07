@@ -1,21 +1,19 @@
-import { webcontainer } from 'tutorialkit:core';
+import { runtime } from 'tutorialkit:core';
 
 interface Props {
   filePath: string;
   newContent: string;
 
-  // default to 'webcontainer'
-  access?: 'store' | 'webcontainer';
+  // default to 'runtime'
+  access?: 'store' | 'runtime';
   testId?: string;
 }
 
-export function ButtonDeleteFile({ filePath, access = 'webcontainer', testId = 'delete-file' }: Props) {
+export function ButtonDeleteFile({ filePath, access = 'runtime', testId = 'delete-file' }: Props) {
   async function deleteFile() {
     switch (access) {
-      case 'webcontainer': {
-        const webcontainerInstance = await webcontainer;
-
-        await webcontainerInstance.fs.rm(filePath);
+      case 'runtime': {
+        await runtime.rm(filePath);
 
         return;
       }

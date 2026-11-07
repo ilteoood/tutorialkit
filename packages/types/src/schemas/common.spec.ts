@@ -4,7 +4,7 @@ import {
   commandsSchema,
   previewSchema,
   terminalSchema,
-  webcontainerSchema,
+  lessonRuntimeSchema,
   baseSchema,
 } from './common.js';
 
@@ -279,16 +279,16 @@ describe('terminalSchema', () => {
   });
 });
 
-describe('webcontainerSchema', () => {
+describe('lessonRuntimeSchema', () => {
   it('should allow an empty object', () => {
     expect(() => {
-      webcontainerSchema.parse({});
+      lessonRuntimeSchema.parse({});
     }).not.toThrow();
   });
 
   it('should allow specifying the mainCommand', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         mainCommand: 'npm run start',
       });
     }).not.toThrow();
@@ -296,7 +296,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying an array of prepareCommands', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         prepareCommands: ['npm install', 'npm run build'],
       });
     }).not.toThrow();
@@ -304,7 +304,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying an array of prepareCommands as string, tuple, and object', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         prepareCommands: ['npm install', ['npm run build', 'Build'], { command: 'npm run test', title: 'Test' }],
       });
     }).not.toThrow();
@@ -312,7 +312,7 @@ describe('webcontainerSchema', () => {
 
   it('should throw an error if mainCommand is not a string', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         mainCommand: 123,
       });
     }).toThrow();
@@ -320,7 +320,7 @@ describe('webcontainerSchema', () => {
 
   it('should throw an error if prepareCommands is not an array', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         prepareCommands: 'npm install',
       });
     }).toThrow();
@@ -328,7 +328,7 @@ describe('webcontainerSchema', () => {
 
   it('should throw an error if prepareCommands array contains non-string values', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         prepareCommands: ['npm install', 123],
       });
     }).toThrow();
@@ -336,7 +336,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the previews', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         previews: false,
       });
     }).not.toThrow();
@@ -344,7 +344,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the autoReload', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         autoReload: true,
       });
     }).not.toThrow();
@@ -352,14 +352,14 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the template', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         template: 'default',
       });
     }).not.toThrow();
   });
   it('should allow specifying the terminal', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         terminal: false,
       });
     }).not.toThrow();
@@ -367,7 +367,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the focus', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         focus: 'index.js',
       });
     }).not.toThrow();
@@ -375,7 +375,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the editor', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         editor: false,
       });
     }).not.toThrow();
@@ -383,7 +383,7 @@ describe('webcontainerSchema', () => {
 
   it('should allow specifying the editor with fileTree', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         editor: {
           fileTree: true,
         },
@@ -393,7 +393,7 @@ describe('webcontainerSchema', () => {
 
   it('should throw an error if editor is not a boolean or object', () => {
     expect(() => {
-      webcontainerSchema.parse({
+      lessonRuntimeSchema.parse({
         editor: 'true',
       });
     }).toThrow();

@@ -1,7 +1,7 @@
 {
   "name": "@tutorialkit/cli",
-  "version": "1.6.0",
-  "description": "Interactive tutorials powered by WebContainer API",
+  "version": "2.0.0",
+  "description": "Interactive tutorials powered by OpenVessel",
   "author": "StackBlitz Inc.",
   "type": "module",
   "bugs": "https://github.com/stackblitz/tutorialkit/issues",

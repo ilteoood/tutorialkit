@@ -1,6 +1,6 @@
 import type { FilesRefList, Files, EditorSchema, FileDescriptor } from '@tutorialkit/types';
 import { atom, map, computed } from 'nanostores';
-import { EditorConfig } from '../webcontainer/editor-config.js';
+import { EditorConfig } from '../vessel/editor-config.js';
 
 export interface EditorDocument {
   value: string | Uint8Array;

@@ -2,12 +2,13 @@ import { fileURLToPath } from 'node:url';
 import type { AstroConfig, AstroIntegration } from 'astro';
 import type { ExpressiveCodePlugin, ThemeObjectOrShikiThemeName } from 'astro-expressive-code';
 import { extraIntegrations } from './integrations.js';
+import { LessonFiles } from './lesson-files/index.js';
 import { updateMarkdownConfig } from './remark/index.js';
 import { tutorialkitCore } from './vite-plugins/core.js';
 import { userlandCSS, watchUserlandCSS } from './vite-plugins/css.js';
 import { overrideComponents, type OverrideComponentsOptions } from './vite-plugins/override-components.js';
 import { tutorialkitStore } from './vite-plugins/store.js';
-import { WebContainerFiles } from './webcontainer-files/index.js';
+import { vesselAssets } from './vite-plugins/vessel-assets.js';
 
 export interface Options {
   /**
@@ -29,37 +30,23 @@ export interface Options {
 
   /**
    * The value of the Cross-Origin-Embedder-Policy header for the dev server.
-   * This is required for webcontainer to works.
+   * This is required for the lesson runtime to work.
    *
    * Using credentialless lets you embed images from third party more easily.
    * However only Firefox and Chrome supports credentialless.
-   *
-   * @see https://webcontainers.io/guides/configuring-headers
    *
    * @default 'require-corp'
    */
   isolation?: 'require-corp' | 'credentialless';
 
   /**
-   * Configuration options when using the Enterprise
-   * version of WebContainer API.
+   * Which hosts the lesson runtime and the processes it runs may reach.
+   *
+   * The default allows the npm registry, fonts, icons and common CDNs.
+   *
+   * @see https://github.com/kobesoft-labs/openvessel#network
    */
-  enterprise?: {
-    /**
-     * The StackBlitz editor origin.
-     */
-    editorOrigin: string;
-
-    /**
-     * The client id.
-     */
-    clientId: string;
-
-    /**
-     * The OAuth scope.
-     */
-    scope: string;
-  };
+  network?: import('openvessel').NetworkPolicy;
 
   /**
    * Expressive code plugins.
@@ -82,11 +69,11 @@ export default function createPlugin({
   defaultRoutes = true,
   components,
   isolation,
-  enterprise,
+  network,
   expressiveCodePlugins = [],
   expressiveCodeThemes,
 }: Options = {}): AstroIntegration {
-  const webcontainerFiles = new WebContainerFiles();
+  const lessonFiles = new LessonFiles();
 
   let _config: AstroConfig;
 
@@ -120,14 +107,14 @@ export default function createPlugin({
                   ],
             },
             define: {
-              __ENTERPRISE__: `${!!enterprise}`,
-              __WC_CONFIG__: enterprise ? JSON.stringify(enterprise) : 'undefined',
+              __TK_NETWORK: network ? JSON.stringify(network) : 'undefined',
             },
             ssr: {
               noExternal: ['@tutorialkit/astro', '@tutorialkit/react'],
             },
             plugins: [
               userlandCSS,
+              vesselAssets,
               tutorialkitStore,
               tutorialkitCore,
               overrideComponents({ components, defaultRoutes: !!defaultRoutes }),
@@ -173,18 +160,20 @@ export default function createPlugin({
         const { server, logger } = options;
         const projectRoot = fileURLToPath(_config.root);
 
-        await webcontainerFiles.serverSetup(projectRoot, options);
+        await lessonFiles.serverSetup(projectRoot, options);
 
         watchUserlandCSS(server, logger);
       },
       async 'astro:server:done'() {
-        await webcontainerFiles.serverDone();
+        await lessonFiles.serverDone();
       },
       async 'astro:build:done'(astroBuildDoneOptions) {
         const projectRoot = fileURLToPath(_config.root);
 
-        await webcontainerFiles.buildAssets(projectRoot, astroBuildDoneOptions);
+        await lessonFiles.buildAssets(projectRoot, astroBuildDoneOptions);
       },
     },
   };
 }
+
+export { vesselAssets } from './vite-plugins/vessel-assets.js';

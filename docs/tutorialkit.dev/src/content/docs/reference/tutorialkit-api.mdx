@@ -25,7 +25,7 @@ Please let us know how you are using this API.
 ### Common types
 
 - `ReadableAtom` from [`nanostores`](https://www.npmjs.com/package/nanostores)
-- `WebContainerProcess` from  [`@webcontainer/api`](https://www.npmjs.com/package/@webcontainer/api)
+- `Process` from [`openvessel`](https://www.npmjs.com/package/openvessel)
 
 ### Properties
 
@@ -37,20 +37,15 @@ Type: `ReadableAtom<PreviewInfo[]>`
 import type { PreviewSchema } from '@tutorialkit/types';
 
 class PreviewInfo {
-    readonly portInfo: PortInfo;
     title?: string;
     pathname?: string;
     get url(): string | undefined;
+    set url(value: string | undefined);
     get port(): number;
     get baseUrl(): string | undefined;
     get ready(): boolean;
     static parse(preview: Exclude<PreviewSchema, boolean>[0]): Preview;
     static equals(a: PreviewInfo, b: PreviewInfo): boolean;
-}
-class PortInfo {
-    readonly port: number;
-    origin?: string | undefined;
-    ready: boolean;
 }
 interface Preview {
     port: number;
@@ -67,7 +62,7 @@ Type: `ReadableAtom<TerminalConfig>`
 
 ```ts
 import type { TerminalPanelType, TerminalSchema } from '@tutorialkit/types';
-import type { WebContainerProcess } from '@webcontainer/api';
+import type { TerminalProcess } from '@tutorialkit/runtime';
 
 class TerminalConfig {
     get panels(): TerminalPanel[];
@@ -82,17 +77,13 @@ class TerminalPanel implements ITerminal {
     readonly id: string;
     readonly title: string;
     get terminal(): ITerminal | undefined;
-    get process(): WebContainerProcess | undefined;
-    get processOptions(): {
-        allowRedirects: boolean;
-        allowCommands: string[] | undefined;
-    } | undefined;
+    get process(): TerminalProcess | undefined;
     get cols(): number | undefined;
     get rows(): number | undefined;
     reset(): void;
     write(data: string): void;
     onData(callback: (data: string) => void): void;
-    attachProcess(process: WebContainerProcess): void;
+    attachProcess(process: TerminalProcess): void;
     attachTerminal(terminal: ITerminal): void;
 }
 
@@ -154,7 +145,7 @@ Type: `ReadableAtom<BootStatus>`
 type BootStatus = 'unknown' | 'blocked' | 'booting' | 'booted';
 ```
 
-Status of the webcontainer's booting.
+Status of the lesson runtime boot.
 
 #### `documents`
 
@@ -246,7 +237,7 @@ Check if lesson has solution files set.
 
 Type: `() => void`
 
-Unlock webcontainer's boot process if it was in `'blocked'` state.
+Unlock the lesson runtime boot if it was in `'blocked'` state.
 
 #### `reset`
 
@@ -348,16 +339,38 @@ You can access Tutorial Core by importing the `tutorialkit:core` entrypoint.
 import * as core from "tutorialkit:core";
 ```
 
-The Tutorial Core provides access to webcontainer APIs. You can use it for example to read and modify files on the virtual file system.
+The Tutorial Core provides access to the lesson runtime APIs. You can use it for example to read and modify files on the virtual file system.
 
 ### Common Types
 
-- `WebContainer` from [`@webcontainer/api`](https://www.npmjs.com/package/@webcontainer/api)
+- `LessonRuntime` from [`@tutorialkit/runtime`](https://www.npmjs.com/package/@tutorialkit/runtime)
 
 ### Properties
 
-#### `webcontainer`
+#### `runtime`
 
-Type: `Promise<WebContainer>`
+Type: `LessonRuntime`
 
-Promise that resolves to the webcontainer that's running in the current lesson.
+The lesson runtime of the current page.
+
+```ts
+class LessonRuntime {
+  readonly bootStatus: ReadableAtom<BootStatus>;
+  readonly ready: Promise<void>;
+  unblockBoot(): void;
+  mount(files: Files): Promise<void>;
+  readFile(path: string, encoding?: 'utf8'): Promise<string | Uint8Array>;
+  writeFile(path: string, data: string | Uint8Array): Promise<void>;
+  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
+  readdir(path: string, options?: { withFileTypes?: boolean }): Promise<string[]>;
+  rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  export(options?: { exclude?: string[] }): Promise<Record<string, Uint8Array>>;
+  exec(commandLine: string): Promise<{ code: number; output: string }>;
+  spawn(command: string, args?: string[], options?: SpawnOptions): Promise<Process>;
+  onServer(listener: (event: ServerEvent) => void): () => void;
+  previewUrl(port: number, path?: string): Promise<string>;
+}
+```
+
+Every path is relative to the lesson root, `/home/user/app`.

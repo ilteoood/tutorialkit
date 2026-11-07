@@ -7,6 +7,6 @@ declare module 'tutorialkit:store' {
 }
 
 declare module 'tutorialkit:core' {
-  /** Promise that resolves to the webcontainer that's running in the current lesson. */
-  export const webcontainer: Promise<import('@webcontainer/api').WebContainer>;
+  /** The lesson runtime of the current page. */
+  export const runtime: import('@tutorialkit/runtime').LessonRuntime;
 }

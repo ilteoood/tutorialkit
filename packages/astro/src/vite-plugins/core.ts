@@ -5,14 +5,11 @@
  * The virtual module can be imported as:
  *
  * ```ts
- * import { webcontainer } from 'tutorialkit:core';
+ * import { runtime } from 'tutorialkit:core';
  *
  * export const MyComponent = () => {
  *   useEffect(() => {
- *     (async () => {
- *       const webcontainerInstance = await webcontainer;
- *       await webcontainerInstance.fs.writeFile('foo.js', 'console.log("hello world")');
- *     })();
+ *     runtime.writeFile('/home/user/app/foo.js', 'console.log("hello world")');
  *   }, []);
  *
  *   return null;
@@ -39,10 +36,10 @@ export const tutorialkitCore: VitePlugin = {
   },
   async load(id) {
     if (id === resolvedVirtualModuleId) {
-      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/webcontainer.ts'));
+      const pathToInit = normalizeImportPath(path.join(__dirname, 'default/components/vessel.ts'));
 
       return `
-        export { webcontainer } from '${pathToInit}';
+        export { runtime } from '${pathToInit}';
       `;
     }
 

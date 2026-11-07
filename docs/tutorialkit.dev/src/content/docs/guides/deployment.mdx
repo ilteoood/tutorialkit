@@ -4,7 +4,7 @@ description: "Deploying TutorialKit to production"
 ---
 import PackageManagerTabs from '@components/Tabs/PackageManagerTabs.astro'
 
-Your TutorialKit project is a static site built using two key technologies: [Astro](https://astro.build/) and [WebContainers](https://webcontainers.io/). These two elements shape the details how you deploy TutorialKit to production.
+Your TutorialKit project is a static site built using two key technologies: [Astro](https://astro.build/) and the [OpenVessel runtime](https://github.com/kobesoft-labs/openvessel). These two elements shape the details how you deploy TutorialKit to production.
 
 In the following sections you will learn more about the build process and the deployment configuration.
 
@@ -45,9 +45,26 @@ Example:
 site:"https://tutorialkit.dev"
 ```
 
+## Network policy
+
+Lessons reach the network through the runtime, which applies a policy to every request. The default is an allowlist that covers what a lesson usually needs: the npm registry (`npm`), web fonts (`fonts`), icon CDNs (`icons`) and public CDNs (`cdn`). A lesson that installs from another registry, or calls an API, gets a blocked request until the policy allows it. The `github` preset covers `github.com` and `raw.githubusercontent.com` for lessons that fetch from a repository.
+
+Pass `network` to the integration to change it:
+
+```js
+// astro.config.mjs
+tutorialkit({
+  network: { mode: 'allowlist', presets: ['npm', 'fonts'], allow: ['api.example.com'] },
+})
+```
+
+`mode: 'ask'` asks the learner to approve each request that the presets, `allow` and `deny` do not already settle, which is useful for a lesson whose hosts you do not know in advance. `mode: 'allow-all'` drops the gate for a lesson that needs the open internet. `deny` always wins over `allow`.
+
 ## Headers configuration
 
-The preview and terminal features in TutorialKit rely on WebContainers technology. To ensure that this technology works correctly, you need to configure the headers of your web server to ensure the site is cross-origin isolated (you can read more about this at [webcontainers.io](https://webcontainers.io/guides/configuring-headers)).
+The preview and terminal features in TutorialKit rely on the OpenVessel runtime. To ensure that it works correctly, you need to configure the headers of your web server to ensure the site is cross-origin isolated (you can read more about this at [OpenVessel](https://github.com/kobesoft-labs/openvessel#deployment)).
+
+The build also emits the runtime and the preview assets under `/ov/runtime/` and `/ov/preview/`, which have to be served from the same origin as the tutorial.
 
 To do that it is required that the tutorial page is server with the following headers:
 

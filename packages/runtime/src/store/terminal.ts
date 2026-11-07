@@ -1,26 +1,18 @@
 import type { TerminalSchema } from '@tutorialkit/types';
-import { WebContainer, auth } from '@webcontainer/api';
 import { atom } from 'nanostores';
 import { tick } from '../utils/promises.js';
-import { isWebContainerSupported } from '../utils/support.js';
+import { browserSupportIssue } from '../utils/support.js';
 import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
-import { newJSHProcess } from '../webcontainer/shell.js';
-import { TerminalConfig, TerminalPanel } from '../webcontainer/terminal-config.js';
+import type { LessonRuntime } from '../vessel/lesson-runtime.js';
+import { newShellProcess } from '../vessel/shell.js';
+import { TerminalConfig, TerminalPanel } from '../vessel/terminal-config.js';
 
 export class TerminalStore {
   terminalConfig = atom<TerminalConfig>(new TerminalConfig());
 
   private _output: ITerminal | undefined = undefined;
-  private _webcontainerLoaded = false;
 
-  constructor(
-    private _webcontainer: Promise<WebContainer>,
-    private _useAuth: boolean,
-  ) {
-    this._webcontainer.then(() => {
-      this._webcontainerLoaded = true;
-    });
-  }
+  constructor(private _runtime: LessonRuntime) {}
 
   getOutputPanel(): ITerminal | undefined {
     return this._output;
@@ -53,11 +45,9 @@ export class TerminalStore {
       }
 
       if (panel.type === 'terminal' && !oldPanel) {
-        // if the panel is a terminal panel, and this panel didn't exist before, spawn a new JSH process
-        this._bootWebContainer(panel)
-          .then(async (webcontainerInstance) => {
-            panel.attachProcess(await newJSHProcess(webcontainerInstance, panel, panel.processOptions));
-          })
+        // if the panel is a terminal panel, and this panel didn't exist before, spawn a new shell
+        this._bootRuntime(panel)
+          .then(async () => panel.attachProcess(await newShellProcess(this._runtime, panel)))
           .catch(() => {
             // do nothing
           });
@@ -66,7 +56,7 @@ export class TerminalStore {
 
     // kill all old processes which we couldn't re-use
     for (const panel of panelMap.values()) {
-      panel.process?.kill();
+      void panel.process?.kill();
     }
 
     this.terminalConfig.set(newTerminalConfig);
@@ -76,7 +66,7 @@ export class TerminalStore {
    * Attaches the provided terminal with the panel matching the provided ID.
    *
    * @param id The ID of the panel to attach the terminal with.
-   * @param terminal The terminal to hook up to the JSH process.
+   * @param terminal The terminal to hook up to the shell.
    */
   async attachTerminal(id: string, terminal: ITerminal) {
     const panel = this.terminalConfig.get().panels.find((panel) => panel.id === id);
@@ -92,35 +82,31 @@ export class TerminalStore {
   onTerminalResize(cols: number, rows: number) {
     // iterate over all terminal panels and resize all processes
     for (const panel of this.terminalConfig.get().panels) {
-      panel.process?.resize({ cols, rows });
+      void panel.process?.resize(cols, rows);
     }
   }
 
-  private async _bootWebContainer(terminal: ITerminal) {
-    validateWebContainerSupported(terminal);
+  private async _bootRuntime(terminal: ITerminal) {
+    const issue = browserSupportIssue();
 
-    const isLoaded = this._webcontainerLoaded;
+    if (issue) {
+      terminal.write([escapeCodes.red('Incompatible Web Browser'), '', issue, ''].join('\n'));
 
-    if (this._useAuth && !isLoaded) {
-      terminal.write('Waiting for authentication to complete...');
-
-      await auth.loggedIn();
-
-      clearTerminal(terminal);
+      throw new Error(issue);
     }
 
-    if (!isLoaded) {
-      terminal.write('Booting WebContainer...');
+    const isBooted = this._runtime.bootStatus.get() === 'booted';
+
+    if (!isBooted) {
+      terminal.write('Booting the runtime...');
     }
 
     try {
-      const webcontainerInstance = await this._webcontainer;
+      await this._runtime.ready;
 
-      if (!isLoaded) {
+      if (!isBooted) {
         clearTerminal(terminal);
       }
-
-      return webcontainerInstance;
     } catch (error) {
       clearTerminal(terminal);
 
@@ -128,35 +114,17 @@ export class TerminalStore {
 
       terminal.write(
         [
-          escapeCodes.red(`Looks like your browser's configuration is blocking WebContainers.`),
+          escapeCodes.red(`Looks like your browser's configuration is blocking the runtime.`),
           '',
           `Let's troubleshoot this!`,
           '',
           'Read more at:',
-          'https://webcontainers.io/guides/browser-config',
+          'https://github.com/kobesoft-labs/openvessel#readme',
           '',
         ].join('\n'),
       );
 
       throw error;
     }
-  }
-}
-
-function validateWebContainerSupported(terminal: ITerminal) {
-  if (!isWebContainerSupported()) {
-    terminal.write(
-      [
-        escapeCodes.red('Incompatible Web Browser'),
-        '',
-        `WebContainers currently work in Chromium-based browsers, Firefox, and Safari 16.4. We're hoping to add support for more browsers as they implement the necessary Web Platform features.`,
-        '',
-        'Read more about browser support:',
-        'https://webcontainers.io/guides/browser-support',
-        '',
-      ].join('\n'),
-    );
-
-    throw new Error('Incompatible Web Browser');
   }
 }

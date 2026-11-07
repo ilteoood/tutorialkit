@@ -2,11 +2,9 @@
 import { TopBar } from 'tutorialkit:override-components';
 import type { Lesson } from '@tutorialkit/types';
 import { ThemeSwitch } from './ThemeSwitch';
-import { LoginButton } from './LoginButton';
 import { DownloadButton } from './DownloadButton';
 import { OpenInStackblitzLink } from './OpenInStackblitzLink';
 import Logo from './Logo.astro';
-import { useAuth } from './setup';
 
 interface Props {
   logoLink: string;
@@ -25,6 +23,4 @@ const { logoLink, openInStackBlitz, downloadAsZip } = Astro.props;
   {openInStackBlitz && <OpenInStackblitzLink client:load transition:persist slot="open-in-stackblitz-link" />}
 
   <ThemeSwitch client:load transition:persist slot="theme-switch" />
-
-  {useAuth && <LoginButton client:load transition:persist slot="login-button" />}
 </TopBar>

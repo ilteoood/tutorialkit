@@ -1,31 +1,30 @@
-import path from 'node:path';
-import type { DirectoryNode, FileNode, FileSystemTree, SpawnOptions, WebContainer } from '@webcontainer/api';
-import { vi, type Mocked } from 'vitest';
-
-interface FakeProcess {
-  pid: number;
-
-  command: string;
-  args: string[];
-  options?: SpawnOptions;
-
-  exit: Promise<number>;
-  output: ReadableStream<string>;
-  input: WritableStream<string>;
-  kill(): void;
-  resize(cols: number, rows: number): void;
+export interface FakeSpawnOptions {
+  cwd?: string;
+  env?: Record<string, string>;
+  terminal?: { cols: number; rows: number };
 }
 
-export type MockedWebContainer = Mocked<WebContainer> & {
-  _fakeFs: FileSystemTree;
-  _fakeProcesses: FakeProcess[];
-};
+export interface FakeProcess {
+  command: string;
+  args: string[];
+  options?: FakeSpawnOptions;
+}
+
+export interface FakeSpawnedProcess {
+  pid: number;
+  output: ReadableStream<string>;
+  exit: Promise<number>;
+  write(data: string): void;
+  end(): void;
+  kill(signal?: string): Promise<void>;
+  resize(cols: number, rows: number): Promise<void>;
+}
 
 export type FakeProcessFactory = (
   command: string,
   args: string[],
-  options?: SpawnOptions,
-) => { exit: Promise<number>; output?: ReadableStream<string>; input?: WritableStream<string> };
+  options?: FakeSpawnOptions,
+) => { exit?: Promise<number>; output?: ReadableStream<string> };
 
 const defaultProcessFactory: FakeProcessFactory = () => {
   return {
@@ -43,196 +42,126 @@ export function resetProcessFactory() {
   fakeProcessFactory = defaultProcessFactory;
 }
 
-vi.mock('@webcontainer/api', () => {
-  const WebContainer = vi.fn<[], MockedWebContainer>(function (this: MockedWebContainer) {
-    this.fs = {
-      readdir: vi.fn(async () => []),
-      readFile: vi.fn(async (filePath) => {
-        const fileNode = getFileNode(this._fakeFs, filePath);
+/**
+ * A lesson runtime backed by an in-memory filesystem, for tests that never boot a real runtime.
+ */
+export interface FakeRuntime {
+  readonly files: Record<string, string | Uint8Array>;
+  readonly processes: FakeProcess[];
 
-        if (!fileNode) {
-          throw new Error(`No file found at ${filePath}`);
-        }
+  mount(files: Record<string, string | Uint8Array>, options?: { path?: string }): Promise<void>;
+  readFile(path: string, encoding?: 'utf8'): Promise<string | Uint8Array>;
+  writeFile(path: string, data: string | Uint8Array): Promise<void>;
+  mkdir(path: string): Promise<void>;
+  readdir(path: string, options?: { withFileTypes?: boolean }): Promise<string[]>;
+  rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  spawn(command: string, args?: string[], options?: FakeSpawnOptions): Promise<FakeSpawnedProcess>;
+  watch(listener: (eventType: 'change' | 'rename', filePath: string) => void): Promise<() => void>;
+}
 
-        return fileNode.file.contents as any;
-      }),
-      writeFile: vi.fn(async (filePath, contents) => {
-        const parentFolder = path.dirname(filePath);
-        const folderNode = getDirNode(this._fakeFs, parentFolder);
+export function createFakeRuntime(root = '/home/user/app'): FakeRuntime {
+  const files: Record<string, string | Uint8Array> = {};
+  const processes: FakeProcess[] = [];
 
-        if (!folderNode) {
-          throw new Error(`No folder found at ${parentFolder}`);
-        }
+  function resolve(path: string) {
+    return path.startsWith('/') ? path : `${root}/${path}`;
+  }
 
-        folderNode.directory[path.basename(filePath)] = { file: { contents } };
-      }),
-      mkdir: vi.fn(async () => '' as any),
-      rm: vi.fn(async (filePath, { recursive } = {}) => {
-        const parentFolder = path.dirname(filePath);
-        const folderNode = getDirNode(this._fakeFs, parentFolder);
+  function childrenOf(directory: string) {
+    const prefix = `${resolve(directory)}/`;
+    const names = new Set<string>();
 
-        if (!folderNode) {
-          throw new Error(`No folder found at ${parentFolder}`);
-        }
+    for (const path of Object.keys(files)) {
+      if (path.startsWith(prefix)) {
+        names.add(path.slice(prefix.length).split('/')[0]);
+      }
+    }
 
-        const fileName = path.basename(filePath);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }
 
-        if (!recursive && 'directory' in folderNode.directory[fileName]) {
-          throw new Error(`Cannot recursively delete folder ${filePath}`);
-        }
+  function createProcess(spawned: { exit?: Promise<number>; output?: ReadableStream<string> }): FakeSpawnedProcess {
+    const written: string[] = [];
 
-        delete folderNode.directory[fileName];
-      }),
-      rename: vi.fn(async () => {
-        // noop
-      }),
-      watch: vi.fn(() => ({
-        close: vi.fn(),
-      })),
-    };
-
-    this._fakeFs = {};
-    this._fakeProcesses = [];
-
-    return this;
-  });
-
-  (WebContainer as any).boot = vi.fn(async () => {
-    return new WebContainer();
-  });
-
-  WebContainer.prototype.spawn = vi.fn(async function (
-    this: MockedWebContainer,
-    command: string,
-    args: string[],
-    options?: SpawnOptions,
-  ) {
-    const {
-      exit,
-      output = new ReadableStream<string>({
-        start(controller) {
-          controller.close();
-        },
-      }),
-      input = new WritableStream<string>({
-        write() {
-          // noop
-        },
-      }),
-    } = fakeProcessFactory(command, args, options);
-
-    const fakeProcess: FakeProcess = {
-      pid: this._fakeProcesses.length,
-      command,
-      args,
-      options,
-      exit,
-      output,
-      input,
-      kill: () => {
-        output.cancel();
-        input.close();
-        this._fakeProcesses = this._fakeProcesses.filter((p) => p !== fakeProcess);
+    return {
+      pid: processes.length,
+      output: spawned.output ?? new ReadableStream<string>(),
+      exit: spawned.exit ?? Promise.resolve(0),
+      write(data) {
+        written.push(typeof data === 'string' ? data : new TextDecoder().decode(data));
       },
-      resize() {
-        // noop
+      end() {
+        written.length = 0;
+      },
+      async kill() {
+        written.length = 0;
+      },
+      async resize() {
+        written.length = 0;
       },
     };
+  }
 
-    Object.defineProperties(fakeProcess, {
-      pid: { enumerable: false },
-      exit: { enumerable: false },
-      output: { enumerable: false },
-      input: { enumerable: false },
-      kill: { enumerable: false },
-      resize: { enumerable: false },
-    });
+  return {
+    files,
+    processes,
 
-    this._fakeProcesses.push(fakeProcess);
+    async mount(newFiles, options) {
+      const base = options?.path ?? root;
 
-    return fakeProcess;
-  });
+      for (const [path, content] of Object.entries(newFiles)) {
+        files[`${base}/${path.startsWith('/') ? path.slice(1) : path}`] = content;
+      }
+    },
 
-  WebContainer.prototype.dispose = vi.fn();
+    async readFile(path, encoding) {
+      const content = files[resolve(path)];
 
-  WebContainer.prototype.mount = vi.fn(async function (this: MockedWebContainer, tree: FileSystemTree) {
-    mergeFileSystem(this._fakeFs, tree);
-  });
-
-  return { WebContainer };
-});
-
-function mergeFileSystem(mergedTree: FileSystemTree, incomingTree: FileSystemTree) {
-  for (const [path, value] of Object.entries(incomingTree)) {
-    if ('file' in value) {
-      mergedTree[path] = value;
-    } else {
-      let subTree: FileSystemTree;
-
-      if (mergedTree[path] && 'directory' in mergedTree[path]) {
-        subTree = (mergedTree[path] as DirectoryNode).directory;
-      } else {
-        subTree = {};
-        mergedTree[path] = {
-          directory: subTree,
-        };
+      if (content === undefined) {
+        throw new Error(`No file found at ${path}`);
       }
 
-      mergeFileSystem(subTree, value.directory);
-    }
-  }
-}
+      return encoding === 'utf8' ? content.toString() : content;
+    },
 
-function getFileNode(tree: FileSystemTree, filePath: string): FileNode | undefined {
-  const node = getNode(tree, filePath);
+    async writeFile(path, data) {
+      files[resolve(path)] = data;
+    },
 
-  if (node && 'file' in node) {
-    return node;
-  }
+    async mkdir(path) {
+      files[`${resolve(path)}/`] ??= '';
+    },
 
-  return undefined;
-}
+    async readdir(path) {
+      return childrenOf(path);
+    },
 
-function getDirNode(tree: FileSystemTree, filePath: string): DirectoryNode | undefined {
-  const node = getNode(tree, filePath);
+    async rm(path) {
+      const target = resolve(path);
+      const prefix = `${target}/`;
 
-  if (node && 'directory' in node) {
-    return node;
-  }
+      for (const filePath of Object.keys(files)) {
+        if (filePath === target || filePath.startsWith(prefix)) {
+          delete files[filePath];
+        }
+      }
+    },
 
-  return undefined;
-}
+    async exists(path) {
+      const target = resolve(path);
 
-function getNode(tree: FileSystemTree, filePath: string): FileNode | DirectoryNode | undefined {
-  const segments = filePath.split('/');
+      return target in files || childrenOf(target).length > 0;
+    },
 
-  for (let i = 0; i < segments.length; ++i) {
-    const segment = segments[i];
+    async spawn(command, args = [], options) {
+      processes.push({ command, args, options });
 
-    if (segment.length === 0) {
-      continue;
-    }
+      return createProcess(fakeProcessFactory(command, args, options));
+    },
 
-    const node = tree[segment];
-
-    if (!node) {
-      return undefined;
-    }
-
-    // if we reached the end of the path
-    if (i === segments.length - 1) {
-      return node;
-    }
-
-    // if not we continue if it's a directory
-    if ('directory' in node) {
-      tree = node.directory;
-      continue;
-    }
-
-    // if the path think the current segment is not a file then we need to return undefined
-    return undefined;
-  }
-
-  return undefined;
+    async watch() {
+      return () => undefined;
+    },
+  };
 }

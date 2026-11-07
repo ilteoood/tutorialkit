@@ -75,7 +75,7 @@ const canonicalUrl = Astro.site ? new URL(Astro.url.pathname, Astro.site).toStri
             document.head.insertAdjacentElement('afterbegin', codemirrorStyles);
           }
 
-          // only swap the main area of the page so we keep the webcontainer iframe intact
+          // only swap the main area of the page so we keep the runtime iframe intact
           const newMain = newDocument.querySelector('main[data-swap-root]');
           const oldMain = document.querySelector('main[data-swap-root]');
 

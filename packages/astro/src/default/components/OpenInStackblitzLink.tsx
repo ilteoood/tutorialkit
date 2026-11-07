@@ -1,5 +1,5 @@
 import StackBlitzSDK from '@stackblitz/sdk';
-import { tutorialStore } from './webcontainer.js';
+import { tutorialStore } from './vessel.js';
 
 export function OpenInStackblitzLink() {
   return (

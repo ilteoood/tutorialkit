@@ -1,6 +1,6 @@
 {
   "name": "@tutorialkit/runtime",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "description": "TutorialKit runtime",
   "author": "StackBlitz Inc.",
   "type": "module",
@@ -34,9 +34,9 @@
   },
   "dependencies": {
     "@tutorialkit/types": "workspace:*",
-    "@webcontainer/api": "1.5.1",
     "nanostores": "^0.10.3",
-    "picomatch": "^4.0.2"
+    "picomatch": "^4.0.2",
+    "openvessel": "https://github.com/kobesoft-labs/openvessel/releases/download/v2.0.1/openvessel-2.0.1.tgz"
   },
   "devDependencies": {
     "@types/picomatch": "^3.0.1",

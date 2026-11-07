@@ -16,23 +16,23 @@ export const i18nSchema = z.object({
   editPageText: z.string().optional().describe('Text of the edit page link.'),
 
   /**
-   * Text of the WebContainer link.
+   * Text of the lesson runtime link.
    *
-   * @default 'Powered by WebContainers'
+   * @default 'Powered by OpenVessel'
    */
-  webcontainerLinkText: z.string().optional().describe('Text of the WebContainer link.'),
+  runtimeLinkText: z.string().optional().describe('Text of the lesson runtime link.'),
 
   /**
-   * Text shown on the call to action button to start webcontainer when boot was blocked
-   * due to memory restrictions.
+   * Text shown on the call to action button to start the lesson runtime when the boot was blocked
+   * because of memory restrictions.
    *
-   * @default 'Start WebContainer'
+   * @default 'Run this tutorial'
    */
-  startWebContainerText: z
+  startRuntimeText: z
     .string()
     .optional()
     .describe(
-      'Text shown on the call to action button to start webcontainer when boot was blocked due to memory restrictions.',
+      'Text shown on the call to action button to start the lesson runtime when the boot was blocked due to memory restrictions.',
     ),
 
   /**

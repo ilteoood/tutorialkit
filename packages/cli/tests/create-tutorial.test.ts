@@ -279,7 +279,7 @@ test('--help prints out message', async () => {
 
   expect(stdout.replace(version, '[version]')).toMatchInlineSnapshot(`
     "
-     @tutorialkit/cli  v[version] Create tutorial apps powered by WebContainer API
+     @tutorialkit/cli  v[version] Create tutorial apps powered by OpenVessel
 
     Usage: @tutorialkit/cli [command] [...options]
            @tutorialkit/cli [ -h | --help | -v | --version ]

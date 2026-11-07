@@ -9,7 +9,7 @@ import { FILES_FOLDER_NAME, IGNORED_FILES, SOLUTION_FOLDER_NAME } from './consta
 import { FilesMap } from './filesmap.js';
 import { getAllFilesMap, getFilesRef, type ContentDirs } from './utils.js';
 
-export class WebContainerFiles {
+export class LessonFiles {
   private _watcher: FSWatcher | undefined;
 
   async serverSetup(projectRoot: string, { server, logger }: AstroServerSetupOptions) {

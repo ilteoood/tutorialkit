@@ -48,7 +48,6 @@ When overriding `TopBar` you can place TutorialKit's default components using fo
 - `open-in-stackblitz-link`: Link for opening current lesson in StackBlitz
 - `download-button`: Button for downloading current lesson as `.zip` file
 - `theme-switch`:  Switch for changing the theme
-- `login-button`: For StackBlitz Enterprise user, the login button
 
 ```jsx title="src/components/CustomTopBar.astro"
 <nav>
@@ -66,7 +65,6 @@ When overriding `TopBar` you can place TutorialKit's default components using fo
 
   <slot name="open-in-stackblitz-link" />
 
-  <slot name="login-button" />
 </nav>
 ```
 
