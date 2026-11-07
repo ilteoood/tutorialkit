@@ -1,12 +1,13 @@
 import type { CommandsSchema, Files } from '@tutorialkit/types';
-import type { IFSWatcher, WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { Process } from 'openvessel';
 import picomatch from 'picomatch/posix.js';
 import { newTask, type Task, type TaskCancelled } from '../tasks.js';
 import { MultiCounter } from '../utils/multi-counter.js';
 import { clearTerminal, escapeCodes, type ITerminal } from '../utils/terminal.js';
-import { Command, Commands } from '../webcontainer/command.js';
-import { StepsController } from '../webcontainer/steps.js';
-import { diffFiles, toFileTree } from '../webcontainer/utils/files.js';
+import { Command, Commands } from '../vessel/command.js';
+import type { LessonRuntime } from '../vessel/lesson-runtime.js';
+import { StepsController } from '../vessel/steps.js';
+import { diffFiles } from '../vessel/utils/files.js';
 import type { EditorStore } from './editor.js';
 import type { TerminalStore } from './terminal.js';
 
@@ -51,7 +52,7 @@ interface RunCommandsOptions {
 }
 
 /**
- * The idea behind this class is that it manages the state of WebContainer and exposes
+ * The idea behind this class is that it manages the state of the lesson runtime and exposes
  * an interface that makes sense to every component of TutorialKit.
  *
  * There should be only a single instance of this class.
@@ -59,14 +60,14 @@ interface RunCommandsOptions {
 export class TutorialRunner {
   private _currentLoadTask: Task<void | TaskCancelled> | undefined = undefined;
   private _currentProcessTask: Task<void | TaskCancelled> | undefined = undefined;
-  private _currentCommandProcess: WebContainerProcess | undefined = undefined;
+  private _currentCommandProcess: Process | undefined = undefined;
   private _currentTemplate: Files | undefined = undefined;
   private _currentFiles: Files | undefined = undefined;
   private _currentRunCommands: Commands | undefined = undefined;
 
   private _ignoreFileEvents = new MultiCounter();
-  private _watcher: IFSWatcher | undefined;
-  private _watchContentFromWebContainer: string[] | boolean = false;
+  private _stopWatching: (() => void) | undefined;
+  private _watchContent: string[] | boolean = false;
   private _readyToWatch = false;
 
   private _packageJsonDirty = false;
@@ -77,18 +78,18 @@ export class TutorialRunner {
   private _packageJsonPath = '';
 
   constructor(
-    private _webcontainer: Promise<WebContainer>,
+    private _runtime: LessonRuntime,
     private _terminalStore: TerminalStore,
     private _editorStore: EditorStore,
     private _stepController: StepsController,
   ) {}
 
-  setWatchFromWebContainer(value: boolean | string[]) {
-    this._watchContentFromWebContainer = value;
+  setWatchFromRuntime(value: boolean | string[]) {
+    this._watchContent = value;
 
-    if (this._readyToWatch && this._watchContentFromWebContainer) {
-      this._webcontainer.then((webcontainer) => this._setupWatcher(webcontainer));
-    } else if (!this._watchContentFromWebContainer) {
+    if (this._readyToWatch && this._watchContent) {
+      void this._setupWatcher();
+    } else if (!this._watchContent) {
       this._stopWatcher();
     }
   }
@@ -98,7 +99,7 @@ export class TutorialRunner {
    *
    * This function is safe to call server side.
    *
-   * To actually run them in WebContainer see `runCommands`.
+   * To actually run them in the lesson runtime see `runCommands`.
    *
    * @param commands The commands schema.
    */
@@ -115,7 +116,7 @@ export class TutorialRunner {
   }
 
   onTerminalResize(cols: number, rows: number) {
-    this._currentCommandProcess?.resize({ cols, rows });
+    void this._currentCommandProcess?.resize(cols, rows);
   }
 
   createFolder(folderPath: string): void {
@@ -125,20 +126,18 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(folderPath);
 
-        await webcontainer.fs.mkdir(folderPath);
+        await this._runtime.mkdir(folderPath);
       },
       { ignoreCancel: true },
     );
   }
 
   /**
-   * Update the content of a single file in WebContainer.
+   * Update the content of a single file in the runtime.
    *
    * @param filePath path of the file
    * @param content new content of the file
@@ -150,13 +149,11 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(filePath);
 
-        await webcontainer.fs.writeFile(filePath, content);
+        await this._runtime.writeFile(filePath, content);
 
         this._updateCurrentFiles({ [filePath]: content });
       },
@@ -165,7 +162,7 @@ export class TutorialRunner {
   }
 
   /**
-   * Update the provided files in WebContainer.
+   * Update the provided files in the runtime.
    *
    * @param files Files to update.
    */
@@ -176,13 +173,11 @@ export class TutorialRunner {
       async (signal) => {
         await previousLoadPromise;
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
         this._ignoreFileEvents.increment(Object.keys(files));
 
-        await webcontainer.mount(toFileTree(files));
+        await this._runtime.mount(files);
 
         this._updateCurrentFiles(files);
       },
@@ -210,13 +205,11 @@ export class TutorialRunner {
         async () => {
           await previousLoadPromise;
 
-          const webcontainer = await this._webcontainer;
-
           try {
             if (type === 'file') {
-              await webcontainer.fs.readFile(filepath);
+              await this._runtime.readFile(filepath);
             } else {
-              await webcontainer.fs.readdir(filepath);
+              await this._runtime.readdir(filepath);
             }
 
             resolve(true);
@@ -230,7 +223,7 @@ export class TutorialRunner {
   }
 
   /**
-   * Load the provided files into WebContainer and remove any other files that had been loaded previously.
+   * Load the provided files into the runtime and remove any other files that had been loaded previously.
    *
    * This function always waits for any previous `prepareFiles` or `updateFile(s)` call to have completed
    * before sending the next one.
@@ -256,8 +249,6 @@ export class TutorialRunner {
         // stop current watcher if they are any
         this._stopWatcher();
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
         [template, files] = await Promise.all([template, files]);
@@ -265,13 +256,9 @@ export class TutorialRunner {
         signal.throwIfAborted();
 
         if (this._currentFiles || this._currentTemplate) {
-          await updateFiles(
-            webcontainer,
-            { ...this._currentTemplate, ...this._currentFiles },
-            { ...template, ...files },
-          );
+          await this._updateFiles({ ...this._currentTemplate, ...this._currentFiles }, { ...template, ...files });
         } else {
-          await webcontainer.mount(toFileTree({ ...template, ...files }));
+          await this._runtime.mount({ ...template, ...files });
         }
 
         this._currentTemplate = { ...template };
@@ -353,11 +340,9 @@ export class TutorialRunner {
 
         await previousTask?.promise;
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
-        return this._runCommands(webcontainer, newCommands, signal);
+        return this._runCommands(newCommands, signal);
       },
       { ignoreCancel: true },
     );
@@ -381,11 +366,9 @@ export class TutorialRunner {
       async (signal) => {
         await Promise.all([previousProcessPromise, loadPromise]);
 
-        const webcontainer = await this._webcontainer;
-
         signal.throwIfAborted();
 
-        return this._runCommands(webcontainer, previousRunCommands, signal);
+        return this._runCommands(previousRunCommands, signal);
       },
       { ignoreCancel: true },
     );
@@ -419,7 +402,9 @@ export class TutorialRunner {
 
       try {
         packageJson = JSON.parse(this._packageJsonContent);
-      } catch {}
+      } catch {
+        packageJson = undefined;
+      }
 
       // add start commands when missing
       if (packageJson && !packageJson.stackblitz?.startCommand) {
@@ -438,7 +423,7 @@ export class TutorialRunner {
     return { files };
   }
 
-  private async _runCommands(webcontainer: WebContainer, commands: Commands, signal: AbortSignal) {
+  private async _runCommands(commands: Commands, signal: AbortSignal) {
     const output = this._terminalStore.getOutputPanel();
 
     clearTerminal(output);
@@ -480,7 +465,7 @@ export class TutorialRunner {
 
         runnableCommands++;
 
-        this._currentCommandProcess = await this._newProcess(webcontainer, output, command.shellCommand);
+        this._currentCommandProcess = await this._newProcess(output, command.shellCommand);
 
         try {
           signal.throwIfAborted();
@@ -492,7 +477,7 @@ export class TutorialRunner {
         if (isMainCommand) {
           shouldClearDirtyFlag = false;
 
-          this._setupWatcher(webcontainer);
+          void this._setupWatcher();
           this._clearDirtyState();
         }
 
@@ -538,13 +523,13 @@ export class TutorialRunner {
       }
 
       // make sure the watcher is configured
-      this._setupWatcher(webcontainer);
+      void this._setupWatcher();
     } finally {
       signal.removeEventListener('abort', abortListener);
     }
   }
 
-  private async _newProcess(webcontainer: WebContainer, output: ITerminal | undefined, shellCommand: string) {
+  private async _newProcess(output: ITerminal | undefined, shellCommand: string) {
     const [command, ...args] = shellCommand.split(' ');
 
     output?.write(`${escapeCodes.magenta('❯')} ${escapeCodes.green(command)} ${args.join(' ')}\n`);
@@ -553,7 +538,7 @@ export class TutorialRunner {
      * We spawn the process and use a fallback for cols and rows in case the output is not connected to a visible
      * terminal yet.
      */
-    const process = await webcontainer.spawn(command, args, {
+    const process = await this._runtime.spawn(command, args, {
       terminal: output
         ? {
             cols: output.cols ?? 80,
@@ -562,7 +547,7 @@ export class TutorialRunner {
         : undefined,
     });
 
-    process.output.pipeTo(new WritableStream({ write: (data) => output?.write(data) }));
+    void process.output.pipeTo(new WritableStream({ write: (data) => output?.write(data) }));
 
     return process;
   }
@@ -594,18 +579,18 @@ export class TutorialRunner {
 
   private _stopWatcher(): void {
     // if there was a watcher terminate it
-    if (this._watcher) {
-      this._watcher.close();
-      this._watcher = undefined;
+    if (this._stopWatching) {
+      this._stopWatching();
+      this._stopWatching = undefined;
     }
   }
 
-  private _setupWatcher(webcontainer: WebContainer) {
+  private async _setupWatcher() {
     // inform that the watcher could be installed if we wanted to
     this._readyToWatch = true;
 
     // if the watcher is alreay setup or we don't sync content we exit
-    if (this._watcher || !this._watchContentFromWebContainer) {
+    if (this._stopWatching || !this._watchContent) {
       return;
     }
 
@@ -621,7 +606,7 @@ export class TutorialRunner {
       Promise.all(
         files.map(async ([filePath, encoding]) => {
           // casts could be removed with an `if` but it feels weird
-          const content = (await webcontainer.fs.readFile(filePath, encoding as any)) as Uint8Array | string;
+          const content = await this._runtime.readFile(filePath, encoding as 'utf8' | undefined);
 
           return [filePath, content] as const;
         }),
@@ -647,17 +632,15 @@ export class TutorialRunner {
       timeoutId = setTimeout(readFiles, 100);
     };
 
-    this._watcher = webcontainer.fs.watch('.', { recursive: true }, (eventType, filename) => {
-      const filePath = `/${filename}`;
-
+    this._stopWatching = await this._runtime.watch((eventType, filePath) => {
       // events we should ignore because we caused them in the TutorialRunner
       if (!this._ignoreFileEvents.decrement(filePath)) {
         return;
       }
 
       if (
-        Array.isArray(this._watchContentFromWebContainer) &&
-        !this._watchContentFromWebContainer.some((pattern) => picomatch.isMatch(filePath, pattern))
+        Array.isArray(this._watchContent) &&
+        !this._watchContent.some((pattern) => picomatch.isMatch(filePath, pattern))
       ) {
         return;
       }
@@ -674,7 +657,7 @@ export class TutorialRunner {
         }
 
         scheduleReadFor(filePath, typeof file.value === 'string' ? 'utf-8' : null);
-      } else if (eventType === 'rename' && Array.isArray(this._watchContentFromWebContainer)) {
+      } else if (eventType === 'rename' && Array.isArray(this._watchContent)) {
         const file = this._editorStore.documents.get()[filePath];
 
         if (file) {
@@ -704,6 +687,16 @@ export class TutorialRunner {
         }
       }
     });
+  }
+
+  private async _updateFiles(previousFiles: Files, newFiles: Files) {
+    const { removed, addedOrModified } = diffFiles(previousFiles, newFiles);
+
+    for (const filePath of removed) {
+      await this._runtime.rm(filePath, { force: true });
+    }
+
+    await this._runtime.mount(addedOrModified);
   }
 
   private _clearDirtyState() {
@@ -742,14 +735,4 @@ function commandsToList(commands: Commands | CommandsSchema) {
   }
 
   return commandsToList(new Commands(commands));
-}
-
-async function updateFiles(webcontainer: WebContainer, previousFiles: Files, newFiles: Files) {
-  const { removed, addedOrModified } = diffFiles(previousFiles, newFiles);
-
-  for (const filePath of removed) {
-    await webcontainer.fs.rm(filePath, { force: true });
-  }
-
-  await webcontainer.mount(toFileTree(addedOrModified));
 }

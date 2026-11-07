@@ -1,26 +1,26 @@
-export function isWebContainerSupported() {
+const SUPPORTED_BROWSERS = 'OpenVessel needs a Chromium-based browser or Firefox.';
+
+/**
+ * Explains why the runtime cannot run here, or `undefined` when nothing stands in its way.
+ */
+export function browserSupportIssue(): string | undefined {
   try {
-    const hasSharedArrayBuffer = 'SharedArrayBuffer' in globalThis;
-    const looksLikeChrome = navigator.userAgent.includes('Chrome');
-    const looksLikeFirefox = navigator.userAgent.includes('Firefox');
-    const looksLikeSafari = navigator.userAgent.includes('Safari');
-
-    if (hasSharedArrayBuffer && (looksLikeChrome || looksLikeFirefox)) {
-      return true;
+    if (!('SharedArrayBuffer' in globalThis)) {
+      return `${SUPPORTED_BROWSERS} This browser does not expose SharedArrayBuffer.`;
     }
 
-    if (hasSharedArrayBuffer && looksLikeSafari) {
-      // we only support Safari 16.4 and up so we check for the version here
-      const match = navigator.userAgent.match(/Version\/(\d+)\.(\d+) (?:Mobile\/.*?)?Safari/);
-      const majorVersion = match ? Number(match?.[1]) : 0;
-      const minorVersion = match ? Number(match?.[2]) : 0;
-
-      return majorVersion > 16 || (majorVersion === 16 && minorVersion >= 4);
+    if (isSafari()) {
+      return `${SUPPORTED_BROWSERS} Safari is not supported.`;
     }
 
-    // allow overriding the support check with localStorage.webcontainer_any_ua = 1
-    return Boolean(localStorage.getItem('webcontainer_any_ua'));
+    return undefined;
   } catch {
-    return false;
+    return `${SUPPORTED_BROWSERS} This browser could not be inspected.`;
   }
+}
+
+function isSafari() {
+  const { userAgent } = navigator;
+
+  return userAgent.includes('Safari') && !userAgent.includes('Chrome') && !userAgent.includes('Firefox');
 }

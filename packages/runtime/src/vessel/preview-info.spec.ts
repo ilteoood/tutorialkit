@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { PortInfo } from './port-info.js';
 import { PreviewInfo } from './preview-info.js';
 
 describe('PreviewInfo', () => {
@@ -51,68 +50,52 @@ describe('PreviewInfo', () => {
     expect(previewInfo.pathname).toBe('/docs');
   });
 
-  it('should not be ready by default', () => {
-    const previewInfo = new PreviewInfo({}, new PortInfo(3000));
+  it('should not be ready until its server is up', () => {
+    const previewInfo = new PreviewInfo({ port: 3000 });
 
     expect(previewInfo.ready).toBe(false);
+    expect(previewInfo.url).toBe(undefined);
   });
 
-  it('should be ready if explicitly set', () => {
-    const previewInfo = new PreviewInfo({}, new PortInfo(3000, undefined, true));
+  it('should be ready once a url is set', () => {
+    const previewInfo = new PreviewInfo({ port: 3000 });
+    previewInfo.url = 'https://example.com';
 
     expect(previewInfo.ready).toBe(true);
+    expect(previewInfo.url).toBe('https://example.com');
   });
 
-  it('should not be ready if explicitly set', () => {
-    const previewInfo = new PreviewInfo({}, new PortInfo(3000, undefined, false));
+  it('should keep the pathname from the parsed schema', () => {
+    const previewInfo = new PreviewInfo(PreviewInfo.parse('3000/foo'));
 
-    expect(previewInfo.ready).toBe(false);
-  });
-
-  it('should have a url with a custom pathname and baseUrl', () => {
-    const parsed = PreviewInfo.parse('3000/foo');
-    const previewInfo = new PreviewInfo(parsed, new PortInfo(parsed.port));
-    previewInfo.portInfo.origin = 'https://example.com';
-
-    expect(previewInfo.url).toBe('https://example.com/foo');
+    expect(previewInfo.pathname).toBe('foo');
   });
 
   it('should be equal to another preview info with the same port and title', () => {
-    const a = new PreviewInfo({}, new PortInfo(3000));
-    const b = new PreviewInfo({}, new PortInfo(3000));
+    const a = new PreviewInfo({ port: 3000 });
+    const b = new PreviewInfo({ port: 3000 });
 
     expect(PreviewInfo.equals(a, b)).toBe(true);
   });
 
   it('should not be equal to another preview info with a different port', () => {
-    const a = new PreviewInfo({}, new PortInfo(3000));
-    const b = new PreviewInfo({}, new PortInfo(4000));
+    const a = new PreviewInfo({ port: 3000 });
+    const b = new PreviewInfo({ port: 4000 });
 
     expect(PreviewInfo.equals(a, b)).toBe(false);
   });
 
   it('should not be equal to another preview info with a different title', () => {
-    const parsed = {
-      a: PreviewInfo.parse([3000, 'Local server']),
-      b: PreviewInfo.parse([3000, 'Remote server']),
-    };
-
-    const a = new PreviewInfo(parsed.a, new PortInfo(parsed.a.port));
-    const b = new PreviewInfo(parsed.b, new PortInfo(parsed.b.port));
+    const a = new PreviewInfo(PreviewInfo.parse([3000, 'Local server']));
+    const b = new PreviewInfo(PreviewInfo.parse([3000, 'Remote server']));
 
     expect(PreviewInfo.equals(a, b)).toBe(false);
   });
 
   it('should not be equal to another preview info with a different pathname', () => {
-    const parsed = {
-      a: PreviewInfo.parse(3000),
-      b: PreviewInfo.parse('3000/b'),
-      c: PreviewInfo.parse('3000/c'),
-    };
-
-    const a = new PreviewInfo(parsed.a, new PortInfo(parsed.a.port));
-    const b = new PreviewInfo(parsed.b, new PortInfo(parsed.b.port));
-    const c = new PreviewInfo(parsed.c, new PortInfo(parsed.c.port));
+    const a = new PreviewInfo(PreviewInfo.parse(3000));
+    const b = new PreviewInfo(PreviewInfo.parse('3000/b'));
+    const c = new PreviewInfo(PreviewInfo.parse('3000/c'));
 
     expect(PreviewInfo.equals(a, b)).toBe(false);
     expect(PreviewInfo.equals(b, c)).toBe(false);

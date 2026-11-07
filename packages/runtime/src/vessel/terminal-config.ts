@@ -1,6 +1,13 @@
 import type { TerminalPanelType, TerminalSchema } from '@tutorialkit/types';
-import type { WebContainerProcess } from '@webcontainer/api';
 import type { ITerminal } from '../utils/terminal.js';
+
+/**
+ * A process attached to a terminal panel.
+ */
+export interface TerminalProcess {
+  resize(cols: number, rows: number): Promise<unknown>;
+  kill(signal?: string): Promise<unknown>;
+}
 
 interface NormalizedTerminalConfig {
   panels: TerminalPanel[];
@@ -11,8 +18,6 @@ interface NormalizedTerminalConfig {
 interface TerminalPanelOptions {
   id?: string;
   title?: string;
-  allowRedirects?: boolean;
-  allowCommands?: string[];
 }
 
 export class TerminalConfig {
@@ -65,7 +70,7 @@ export class TerminalPanel implements ITerminal {
   readonly title: string;
 
   private _terminal?: ITerminal;
-  private _process?: WebContainerProcess;
+  private _process?: TerminalProcess;
   private _data: { data: string; type: 'input' | 'echo' }[] = [];
   private _onData?: (data: string) => void;
 
@@ -99,17 +104,6 @@ export class TerminalPanel implements ITerminal {
 
   get process() {
     return this._process;
-  }
-
-  get processOptions() {
-    if (this.type === 'output') {
-      return undefined;
-    }
-
-    return {
-      allowRedirects: this._options?.allowRedirects ?? false,
-      allowCommands: this._options?.allowCommands,
-    };
   }
 
   // #region ITerminal methods
@@ -161,15 +155,15 @@ export class TerminalPanel implements ITerminal {
   // #endregion
 
   /**
-   * Attach a WebContainer process to this panel.
+   * Attach a process to this panel.
    *
-   * @param process The WebContainer process
+   * @param process The process.
    */
-  attachProcess(process: WebContainerProcess) {
+  attachProcess(process: TerminalProcess) {
     this._process = process;
 
     if (this.cols != null && this.rows != null) {
-      this._process.resize({ cols: this.cols, rows: this.rows });
+      void this._process.resize(this.cols, this.rows);
     }
   }
 
@@ -195,7 +189,7 @@ export class TerminalPanel implements ITerminal {
     }
 
     if (this.cols != null && this.rows != null) {
-      this._process?.resize({ cols: this.cols, rows: this.rows });
+      void this._process?.resize(this.cols, this.rows);
     }
   }
 }
@@ -232,10 +226,7 @@ function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalCon
 
   const panels: TerminalPanel[] = [];
 
-  const options = {
-    allowRedirects: config.allowRedirects,
-    allowCommands: config.allowCommands,
-  };
+  const options: TerminalPanelOptions = {};
 
   if (config.panels) {
     if (config.panels === 'output') {
@@ -257,8 +248,6 @@ function normalizeTerminalConfig(config?: TerminalSchema): NormalizedTerminalCon
           terminalPanel = new TerminalPanel(panel.type, {
             id: panel.id,
             title: panel.title,
-            allowRedirects: panel.allowRedirects ?? config.allowRedirects,
-            allowCommands: panel.allowCommands ?? config.allowCommands,
           });
         }
 

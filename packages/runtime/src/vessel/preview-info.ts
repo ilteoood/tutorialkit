@@ -1,35 +1,24 @@
 import type { PreviewSchema } from '@tutorialkit/types';
-import { PortInfo } from './port-info.js';
 
 export class PreviewInfo {
-  readonly portInfo: PortInfo;
   title?: string;
   pathname?: string;
 
-  get url(): string | undefined {
-    if (this.baseUrl) {
-      return new URL(this.pathname ?? '/', this.baseUrl).toString();
-    }
+  /**
+   * The URL the preview is served from. Only set once its server is up.
+   */
+  url?: string;
 
-    return undefined;
-  }
-
-  get port() {
-    return this.portInfo.port;
-  }
-
-  get baseUrl() {
-    return this.portInfo.origin;
-  }
-
-  get ready() {
-    return this.portInfo.ready;
-  }
-
-  constructor(preview: Omit<Preview, 'port'>, portInfo: PortInfo) {
+  constructor(preview: Preview) {
     this.title = preview.title;
     this.pathname = preview.pathname;
-    this.portInfo = portInfo;
+    this.port = preview.port;
+  }
+
+  readonly port: number;
+
+  get ready() {
+    return this.url !== undefined;
   }
 
   static parse(preview: Exclude<PreviewSchema, boolean>[0]): Preview {
@@ -55,7 +44,7 @@ export class PreviewInfo {
   }
 
   static equals(a: PreviewInfo, b: PreviewInfo) {
-    return a.portInfo.port === b.portInfo.port && a.pathname === b.pathname && a.title === b.title;
+    return a.port === b.port && a.pathname === b.pathname && a.title === b.title;
   }
 }
 

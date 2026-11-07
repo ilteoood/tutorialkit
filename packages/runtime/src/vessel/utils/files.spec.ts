@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { areFilesEqual, diffFiles, toFileTree } from './files.js';
+import { areFilesEqual, diffFiles } from './files.js';
 
 describe('areFilesEqual', () => {
   it('should return true if files are equal', () => {
@@ -67,27 +67,5 @@ describe('diffFiles', () => {
 
     expect(diff.addedOrModified).toEqual({ 'a.txt': 'different content', 'c.txt': 'content' });
     expect(diff.removed).toEqual(['b.txt']);
-  });
-});
-
-describe('toFileTree', () => {
-  it('should convert files to a file system tree', () => {
-    const files = {
-      '/a.js': 'a content',
-      '/b.md': 'b content',
-      '/dir/bar': 'bar content',
-    };
-
-    const tree = toFileTree(files);
-
-    expect(tree).toEqual({
-      'a.js': { file: { contents: 'a content' } },
-      'b.md': { file: { contents: 'b content' } },
-      dir: {
-        directory: {
-          bar: { file: { contents: 'bar content' } },
-        },
-      },
-    });
   });
 });

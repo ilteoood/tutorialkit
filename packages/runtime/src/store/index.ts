@@ -1,26 +1,20 @@
 import type { FileDescriptor, Files, FilesystemError, Lesson } from '@tutorialkit/types';
-import type { WebContainer } from '@webcontainer/api';
 import { atom, type ReadableAtom } from 'nanostores';
 import { LessonFilesFetcher } from '../lesson-files.js';
 import { newTask, type Task } from '../tasks.js';
 import type { ITerminal } from '../utils/terminal.js';
-import type { EditorConfig } from '../webcontainer/editor-config.js';
-import { bootStatus, unblockBoot, type BootStatus } from '../webcontainer/on-demand-boot.js';
-import type { PreviewInfo } from '../webcontainer/preview-info.js';
-import { StepsController } from '../webcontainer/steps.js';
-import type { TerminalConfig } from '../webcontainer/terminal-config.js';
+import type { EditorConfig } from '../vessel/editor-config.js';
+import type { BootStatus, LessonRuntime } from '../vessel/lesson-runtime.js';
+import type { PreviewInfo } from '../vessel/preview-info.js';
+import { StepsController } from '../vessel/steps.js';
+import type { TerminalConfig } from '../vessel/terminal-config.js';
 import { EditorStore, type EditorDocument, type EditorDocuments, type ScrollPosition } from './editor.js';
 import { PreviewsStore } from './previews.js';
 import { TerminalStore } from './terminal.js';
 import { TutorialRunner } from './tutorial-runner.js';
 
 interface StoreOptions {
-  webcontainer: Promise<WebContainer>;
-
-  /**
-   * Whether or not authentication is used for the WebContainer API.
-   */
-  useAuth: boolean;
+  runtime: LessonRuntime;
 
   /**
    * The base path to use when fetching files.
@@ -29,7 +23,7 @@ interface StoreOptions {
 }
 
 export class TutorialStore {
-  private _webcontainer: Promise<WebContainer>;
+  private _runtime: LessonRuntime;
 
   private _runner: TutorialRunner;
   private _previewsStore: PreviewsStore;
@@ -48,18 +42,18 @@ export class TutorialStore {
   private _lessonTemplate: Files | undefined;
 
   /**
-   * Whether or not the current lesson is fully loaded in WebContainer
+   * Whether or not the current lesson is fully loaded in the runtime
    * and in every stores.
    */
   readonly lessonFullyLoaded = atom<boolean>(false);
 
-  constructor({ useAuth, webcontainer, basePathname }: StoreOptions) {
-    this._webcontainer = webcontainer;
+  constructor({ runtime, basePathname }: StoreOptions) {
+    this._runtime = runtime;
     this._editorStore = new EditorStore();
     this._lessonFilesFetcher = new LessonFilesFetcher(basePathname);
-    this._previewsStore = new PreviewsStore(this._webcontainer);
-    this._terminalStore = new TerminalStore(this._webcontainer, useAuth);
-    this._runner = new TutorialRunner(this._webcontainer, this._terminalStore, this._editorStore, this._stepController);
+    this._previewsStore = new PreviewsStore(runtime);
+    this._terminalStore = new TerminalStore(runtime);
+    this._runner = new TutorialRunner(runtime, this._terminalStore, this._editorStore, this._stepController);
 
     /**
      * By having this code under `import.meta.hot`, it gets:
@@ -151,7 +145,7 @@ export class TutorialStore {
       return;
     }
 
-    this._runner.setWatchFromWebContainer(lesson.data.filesystem?.watch ?? false);
+    this._runner.setWatchFromRuntime(lesson.data.filesystem?.watch ?? false);
 
     this._lessonTask = newTask(
       async (signal) => {
@@ -212,9 +206,9 @@ export class TutorialStore {
     return this._editorStore.currentDocument;
   }
 
-  /** Status of the webcontainer's booting */
+  /** Status of the runtime's booting */
   get bootStatus(): ReadableAtom<BootStatus> {
-    return bootStatus;
+    return this._runtime.bootStatus;
   }
 
   /** Files that are available in the editor. */
@@ -295,9 +289,9 @@ export class TutorialStore {
     return !!this._lesson && Object.keys(this._lesson.solution[1]).length >= 1;
   }
 
-  /** Unlock webcontainer's boot process if it was in `'blocked'` state */
+  /** Unlock the runtime's boot process if it was in `'blocked'` state */
   unblockBoot() {
-    unblockBoot();
+    this._runtime.unblockBoot();
   }
 
   /** Reset changed files back to lesson's initial state */
