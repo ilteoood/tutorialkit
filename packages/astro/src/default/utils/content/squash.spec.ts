@@ -39,7 +39,7 @@ describe('squash', () => {
         terminal: {
           panels: ['terminal', 'output'],
           activePanel: 0,
-          allowCommands: ['ls', 'echo'],
+          open: false,
         },
       } satisfies Metadata,
     };
@@ -56,7 +56,7 @@ describe('squash', () => {
       terminal: {
         panels: ['terminal'],
         activePanel: 0,
-        allowCommands: ['ls', 'echo'],
+        open: false,
       },
       template: 'default',
     });
@@ -69,7 +69,7 @@ describe('squash', () => {
         terminal: {
           panels: ['terminal', 'output'],
           activePanel: 0,
-          allowCommands: ['ls', 'echo'],
+          open: false,
         },
       } satisfies Metadata,
     };
@@ -91,7 +91,7 @@ describe('squash', () => {
       data: {
         template: 'default',
         i18n: {
-          startWebContainerText: 'Run this tutorial',
+          startRuntimeText: 'Run this tutorial',
           partTemplate: 'Part ${index}: ${title}',
         },
       } satisfies Metadata,
@@ -107,7 +107,7 @@ describe('squash', () => {
 
     expect(squash<Metadata>([lesson1.data, tutorial.data], ['i18n'])).toEqual({
       i18n: {
-        startWebContainerText: 'Run this tutorial',
+        startRuntimeText: 'Run this tutorial',
         partTemplate: 'Foobar: ${title}',
       },
     });

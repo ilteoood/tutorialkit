@@ -1,4 +1,5 @@
-import { tutorialStore, webcontainer as webcontainerPromise } from './webcontainer.js';
+import { zipSync, type Zippable } from 'fflate';
+import { runtime, tutorialStore } from './vessel.js';
 
 export function DownloadButton() {
   return (
@@ -19,8 +20,8 @@ async function onClick() {
     throw new Error('Missing lesson');
   }
 
-  const webcontainer = await webcontainerPromise;
-  const data = await webcontainer.export('/home/tutorial', { format: 'zip', excludes: ['node_modules'] });
+  const files = await runtime.export({ exclude: ['node_modules'] });
+  const data = zipSync(toZipTree(files));
 
   let filename =
     typeof lesson.data.downloadAsZip === 'object'
@@ -34,11 +35,29 @@ async function onClick() {
   const link = document.createElement('a');
   link.style.display = 'none';
   link.download = filename;
-  link.href = URL.createObjectURL(new Blob([data] as any, { type: 'application/zip' }));
+  link.href = URL.createObjectURL(new Blob([data], { type: 'application/zip' }));
 
   document.body.appendChild(link);
   link.click();
 
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
+}
+
+function toZipTree(files: Record<string, Uint8Array>): Zippable {
+  const tree: Zippable = Object.create(null);
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const segments = filePath.split('/').filter(Boolean);
+    let current = tree;
+
+    for (const directory of segments.slice(0, -1)) {
+      current[directory] ??= Object.create(null);
+      current = current[directory] as Zippable;
+    }
+
+    current[segments[segments.length - 1]] = content;
+  }
+
+  return tree;
 }
