@@ -41,6 +41,14 @@ function requestPath(url: string | undefined): string {
   return decodeURIComponent((url ?? '/').split('?')[0]);
 }
 
+function requestOrigin(req: Connect.IncomingMessage): string {
+  const forwarded = req.headers['x-forwarded-proto'];
+  const protocol =
+    typeof forwarded === 'string' ? forwarded : (req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http';
+
+  return `${protocol}://${req.headers.host ?? 'localhost'}`;
+}
+
 function applyHeaders(res: ServerResponse, urlPath: string, origin: string): void {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
 
@@ -92,7 +100,7 @@ function openvesselAssets(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        applyHeaders(res, requestPath(req.url), `http://${req.headers.host ?? 'localhost'}`);
+        applyHeaders(res, requestPath(req.url), requestOrigin(req));
         next();
       });
       server.middlewares.use(serveAssets(ASSET_ROOTS));

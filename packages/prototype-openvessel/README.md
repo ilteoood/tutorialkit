@@ -70,6 +70,8 @@ Service-worker scopes: the runtime registers `/ov/runtime/sw.js` with scope `/ov
 - **The preview iframe is sandboxed with `allow-scripts allow-same-origin`**, which Chromium warns can escape the sandbox. That is OpenVessel's own design (`createPreview`), not something the host page can change.
 - **The host page needs a favicon** or the browser logs a 404 — unrelated to OpenVessel.
 
+- **The host page must be served from a secure origin.** `COOP` is ignored on an origin that is not potentially trustworthy, so `crossOriginIsolated` stays `false` and `OpenVessel.boot()` rejects the page with *"the host page must be cross-origin isolated"*. `http://localhost` is exempt; `http://192.168.x.x` is not, so a LAN address needs HTTPS or the browser flag `--unsafely-treat-insecure-origin-as-secure=http://192.168.x.x`. The runtime CSP's `frame-ancestors` has to name the scheme the browser actually used, so a TLS-terminating proxy has to forward it (`x-forwarded-proto`) — `vite.config.ts` reads that header.
+
 ### 4. The assets every site must ship
 
 | Asset | Size | Notes |
