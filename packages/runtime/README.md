@@ -9,6 +9,10 @@ The runtime exposes the following:
 
 Only a single instance of `TutorialStore` should be created in your application and its lifetime is bound by the lifetime of the `LessonRuntime`.
 
+## Browser support
+
+The lesson runtime needs a browser that exposes `SharedArrayBuffer` inside a cross-origin isolated page: current Chromium and Firefox. Safari is not supported, and the terminal says so instead of staying blank.
+
 ## License
 
 MIT

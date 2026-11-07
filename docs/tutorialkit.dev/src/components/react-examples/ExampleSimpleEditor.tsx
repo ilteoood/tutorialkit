@@ -3,7 +3,7 @@ import CodeMirrorEditor from '@tutorialkit/react/core/CodeMirrorEditor';
 import FileTree from '@tutorialkit/react/core/FileTree';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { useLessonRuntime } from './hooks/useLessonRuntime';
+import { lessonRuntime } from './hooks/useLessonRuntime';
 import { useTheme } from './hooks/useTheme';
 
 const Terminal = lazy(() => import('@tutorialkit/react/core/Terminal'));
@@ -60,7 +60,7 @@ export default function ExampleSimpleEditor() {
 }
 
 function useSimpleEditor() {
-  const runtime = useLessonRuntime();
+  const runtime = lessonRuntime;
   const [terminal, setTerminal] = useState<XTerm | null>(null);
   const [selectedFile, setSelectedFile] = useState('/src/index.js');
   const [documents, setDocuments] = useState<Record<string, EditorDocument>>(FILES);

@@ -95,6 +95,13 @@ interface TerminalProcess {
 
 `WebContainer.export()` returned a zip; `LessonRuntime.export()` returns the files as a `Record<string, Uint8Array>`, with `{ exclude }` instead of `{ format, excludes }`. The built-in download button zips them itself with `fflate`; a custom one has to do the same.
 
+## Behaviour changes
+
+- Lesson previews are served from paths of the shape `__ov/open?port=<port>` on your own origin, not from `*.local-credentialless.webcontainer-api.io`. Code that compares preview URLs, or that derives a port from one, breaks.
+- `git`, `python` and native modules are not available. A lesson whose `prepareCommands` install them fails at that step.
+- The shell is a POSIX `sh` managed by the runtime instead of `jsh`: built-ins and the prompt differ.
+- File watching walks the lesson tree, because the runtime watches one directory at a time, so a very large lesson tree costs a walk per change.
+
 ## Package versions
 
 Every `@tutorialkit/*` package moves to 2.0.0, together with `tutorialkit` (the CLI). Nothing is published yet: the versions are set so the release after this change is a major one. Update every `@tutorialkit/*` dependency in your project at once; mixing 1.x and 2.x packages fails at runtime because the runtime bundle and the `tutorialkit:core` export no longer match.

@@ -73,6 +73,10 @@ export default defineConfig({
               label: 'How to use TutorialKit API',
               link: '/guides/how-to-use-tutorialkit-api/',
             },
+            {
+              label: 'Migrating to 2.0',
+              link: '/guides/migrating-to-2/',
+            },
           ],
         },
         {

@@ -1,6 +1,6 @@
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { useLessonRuntime } from './hooks/useLessonRuntime';
+import { lessonRuntime } from './hooks/useLessonRuntime';
 import { useTheme } from './hooks/useTheme';
 
 const Terminal = lazy(() => import('@tutorialkit/react/core/Terminal'));
@@ -26,7 +26,7 @@ export default function ExampleTerminal() {
 }
 
 function useTerminal() {
-  const runtime = useLessonRuntime();
+  const runtime = lessonRuntime;
   const [terminal, setTerminal] = useState<XTerm | null>(null);
 
   useEffect(() => {
