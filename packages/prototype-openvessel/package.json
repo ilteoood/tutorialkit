@@ -1,0 +1,17 @@
+{
+  "name": "prototype.tutorialkit.openvessel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "openvessel": "https://github.com/kobesoft-labs/openvessel/releases/download/v2.0.1/openvessel-2.0.1.tgz"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  }
+}
