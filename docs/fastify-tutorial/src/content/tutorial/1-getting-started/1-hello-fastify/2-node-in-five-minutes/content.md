@@ -107,7 +107,7 @@ Almost every function you write in Fastify will be `async`. We will see why in a
 - `scripts` — shortcuts you run with `npm run <name>`.
 - `dependencies` — the libraries your project needs. `npm install` downloads them into `node_modules`.
 
-The `^` in `^5.12.8` means "any version starting with 5.12.8, but not 6".
+The `^` in `^5.12.8` means "any version from 5.12.8 up to, but not including, 6.0.0".
 
 :::tip
 That is everything you need for now. Every time we meet a new Node.js feature, we will stop and explain it.

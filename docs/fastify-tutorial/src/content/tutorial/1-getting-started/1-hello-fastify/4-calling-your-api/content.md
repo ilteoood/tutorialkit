@@ -71,7 +71,7 @@ curl -X POST http://127.0.0.1:3000/tasks \
 We do not have a `/tasks` route yet, so this answers with `404`. We will add it in a moment.
 
 :::tip
-Two ways to send a request body: `curl -d` and the `-H` header are both needed. Without the `Content-Type` header Fastify does not know how to read the body.
+Two things are needed to send a body: the `-d` flag for the body itself, and the `Content-Type` header that says what kind of body it is. Without that header Fastify does not know how to read it.
 :::
 
 Now that you know how to talk to a server, let us add some real routes.

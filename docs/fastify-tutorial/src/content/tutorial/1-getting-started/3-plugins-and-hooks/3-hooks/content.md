@@ -49,7 +49,6 @@ A hook that throws an error stops the request: Fastify calls the error handler a
 ## Try it
 
 ```bash
-```bash
 curl -i http://127.0.0.1:3000/
 ```
 

@@ -60,6 +60,8 @@ A **Tasks API** — a to-do list you can use over HTTP:
 | PATCH  | `/tasks/:id` | Update a task  |
 | DELETE | `/tasks/:id` | Delete a task  |
 
+Later in the tutorial every route will live under `/api`, so the URL of this list will be `/api/tasks`. The `/api` part is a **prefix**: a piece of text added to the front of every route of a plugin.
+
 The tasks live in memory (in a JavaScript `Map`), so they disappear when the server stops. That keeps the focus on Fastify — swapping in a real database later is just one more plugin.
 
 ## The files in front of you
