@@ -30,7 +30,8 @@ fastify.setErrorHandler((error, request, reply) => {
 });
 ```
 
-- `error.statusCode` is set by Fastify for the errors it knows about: a validation error is `400`, a missing route is `404`.
+- `error.statusCode` is set by Fastify for the errors it knows about: a request that does not match the schema is `400`.
+- A route that does not exist never reaches this handler: Fastify sends it to the not found handler below.
 - A plain `new Error('...')` has no status code, so it becomes `500`.
 - `request.log` writes the real error to the logs, while the client only gets a safe message. Never send the message of a `500` to the client: it can contain details about your internals.
 
