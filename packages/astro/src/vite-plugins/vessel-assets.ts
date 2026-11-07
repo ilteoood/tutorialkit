@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+export type { VitePlugin } from '../types.js';
 import type { VitePlugin } from '../types.js';
 
 const require = createRequire(import.meta.url);
@@ -95,7 +96,7 @@ function resolveAssetPath(url: string | undefined) {
 function applyIsolationHeaders(response: ServerResponse, relative: string, origin: string) {
   response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
 
-  const embedderPolicy = relative === 'preview/__ov-sw.js' ? 'credentialless' : 'require-corp';
+  const embedderPolicy = path.posix.basename(relative) === '__ov-sw.js' ? 'credentialless' : 'require-corp';
   response.setHeader('Cross-Origin-Embedder-Policy', embedderPolicy);
 
   if (CORS_ISOLATED_FILES.has(path.posix.basename(relative))) {
