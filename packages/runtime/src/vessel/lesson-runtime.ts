@@ -28,6 +28,13 @@ export interface LessonRuntimeOptions {
   network?: Partial<NetworkPolicy>;
 }
 
+const DEFAULT_NETWORK: NetworkPolicy = {
+  mode: 'allowlist',
+  presets: ['npm', 'fonts', 'icons', 'cdn'],
+  allow: [],
+  deny: [],
+};
+
 export interface ServerEvent {
   port: number;
   type: 'open' | 'closed';
@@ -174,7 +181,7 @@ export class LessonRuntime {
     const vessel = await OpenVessel.boot({
       runtimeUrl: this._options.runtimeUrl,
       previewUrl: this._options.previewUrl,
-      network: this._options.network,
+      network: { ...DEFAULT_NETWORK, ...this._options.network },
     });
 
     this._bootStatus.set('booted');

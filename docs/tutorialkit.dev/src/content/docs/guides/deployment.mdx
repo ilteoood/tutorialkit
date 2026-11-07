@@ -45,6 +45,21 @@ Example:
 site:"https://tutorialkit.dev"
 ```
 
+## Network policy
+
+Lessons reach the network through the runtime, which applies a policy to every request. The default is an allowlist that covers what a lesson usually needs: the npm registry (`npm`), web fonts (`fonts`), icon CDNs (`icons`) and public CDNs (`cdn`). A lesson that installs from another registry, or calls an API, gets a blocked request until the policy allows it. The `github` preset covers `github.com` and `raw.githubusercontent.com` for lessons that fetch from a repository.
+
+Pass `network` to the integration to change it:
+
+```js
+// astro.config.mjs
+tutorialkit({
+  network: { mode: 'allowlist', presets: ['npm', 'fonts'], allow: ['api.example.com'] },
+})
+```
+
+`mode: 'ask'` asks the learner to approve each request that the presets, `allow` and `deny` do not already settle, which is useful for a lesson whose hosts you do not know in advance. `mode: 'allow-all'` drops the gate for a lesson that needs the open internet. `deny` always wins over `allow`.
+
 ## Headers configuration
 
 The preview and terminal features in TutorialKit rely on the OpenVessel runtime. To ensure that it works correctly, you need to configure the headers of your web server to ensure the site is cross-origin isolated (you can read more about this at [OpenVessel](https://github.com/kobesoft-labs/openvessel#deployment)).
