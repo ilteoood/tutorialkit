@@ -318,9 +318,7 @@ You can define which terminal panel will be active by default by specifying the 
 
 You can set terminal open by default by specifying the `open` value.
 
-An interactive terminal will disable the output redirect syntax by default. For instance, you cannot create a file `world.txt` with the contents `hello` using the command `echo hello > world.txt`. The reason is that this could disrupt the lesson if a user overwrites certain files. To allow output redirection, you can change the behavior with the `allowRedirects` setting. You can define this setting either per panel or for all panels at once.
-
-Additionally, you may not want users to run arbitrary commands. For example, if you are creating a lesson about `vitest`, you could specify that the only command the user can run is `vitest` by providing a list of `allowCommands`. Any other command executed by the user will be blocked. You can define the `allowCommands` setting either per panel or for all panels at once.
+An interactive terminal runs a POSIX `sh` inside the lesson runtime, so output redirection and pipes work as they do in a normal shell.
 
 By default, in every new lesson terminals start a new session. If you want to keep the terminal session between lessons, you can specify the `id` property for a given terminal panel and keep the same `id` across lessons.
 <PropertyTable inherited type="Terminal" />
@@ -331,14 +329,12 @@ The `Terminal` type has the following shape:
 type Terminal = {
     panels: TerminalPanel[],
     activePanel?: number,
-    allowRedirects?: boolean,
-    allowCommands?: string[],
     open?: boolean,
 }
 
 type TerminalPanel = TerminalType
     | [type: TerminalType, title: string]
-    | { type: TerminalType, title?: string, id?: string, allowRedirects?: boolean, allowCommands?: boolean }
+    | { type: TerminalType, title?: string, id?: string }
 
 type TerminalType = 'terminal' | 'output'
 
@@ -355,10 +351,6 @@ terminal:
     - type: terminal
       id: 'cmds'
       title: 'Command Line'
-      allowRedirects: true
-      allowCommands:
-        - ls
-        - echo
 
 ```
 
