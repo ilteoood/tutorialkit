@@ -1,6 +1,6 @@
 # TutorialKit CLI
 
-## Creating interactive tutorials powered by WebContainer API
+## Creating interactive tutorials powered by OpenVessel
 
 **With NPM**
 

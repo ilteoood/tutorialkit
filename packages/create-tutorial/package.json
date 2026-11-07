@@ -1,7 +1,7 @@
 {
   "name": "create-tutorial",
   "version": "0.0.3",
-  "description": "Interactive tutorials powered by WebContainer API",
+  "description": "Interactive tutorials powered by OpenVessel",
   "author": "StackBlitz Inc.",
   "type": "module",
   "bugs": "https://github.com/stackblitz/tutorialkit/issues",
