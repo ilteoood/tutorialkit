@@ -20,7 +20,7 @@ import sourceExampleCodeMirrorEditor from '@components/react-examples/ExampleCod
 import sourceExampleTerminal from '@components/react-examples/ExampleTerminal?raw';
 import sourceUseWebcontainer from "@components/react-examples/hooks/useWebcontainer?raw";
 
-You can reuse TutorialKit's React components in your own applications. They are designed to work well with the [WebContainer API][webcontainers].
+You can reuse TutorialKit's React components in your own applications. They are designed to work well with the [OpenVessel runtime][openvessel].
 
 :::note
 Using `@tutorialkit/react` package directly without `@tutorialkit/astro` is **experimental** at the moment.
@@ -188,12 +188,12 @@ A component to interact with a terminal using [xterm.js](https://xtermjs.org/). 
 
 * `onTerminalReady?: (terminal: Terminal) => void` - A callback that will be called when the terminal is ready. The `Terminal` instance from `xterm` will be provided as an argument.
 
-* `onTerminalResize?: (cols: number, rows: number) => void` - A callback that will be called when the terminal is resized. The number of columns and rows will be provided as arguments. This is typically used to send a `SIGWINCH` signal to the running webcontainer process that is connected to the terminal.
+* `onTerminalResize?: (cols: number, rows: number) => void` - A callback that will be called when the terminal is resized. The number of columns and rows will be provided as arguments. This is typically used to send a `SIGWINCH` signal to the running lesson runtime process that is connected to the terminal.
 
 * `theme: 'dark' | 'light'` - The theme to use for the editor. Two values are available: `light` and `dark`.
 
 * `className?: string` - A class name to apply to the root element of the component.
 
 
-[webcontainers]: https://webcontainers.io
+[openvessel]: https://github.com/kobesoft-labs/openvessel
 [stackblitz-example]: https://stackblitz.com/edit/tutorialkit-react-components

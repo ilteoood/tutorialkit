@@ -4,7 +4,7 @@ description: "Deploying TutorialKit to production"
 ---
 import PackageManagerTabs from '@components/Tabs/PackageManagerTabs.astro'
 
-Your TutorialKit project is a static site built using two key technologies: [Astro](https://astro.build/) and [WebContainers](https://webcontainers.io/). These two elements shape the details how you deploy TutorialKit to production.
+Your TutorialKit project is a static site built using two key technologies: [Astro](https://astro.build/) and the [OpenVessel runtime](https://github.com/kobesoft-labs/openvessel). These two elements shape the details how you deploy TutorialKit to production.
 
 In the following sections you will learn more about the build process and the deployment configuration.
 
@@ -47,7 +47,9 @@ site:"https://tutorialkit.dev"
 
 ## Headers configuration
 
-The preview and terminal features in TutorialKit rely on WebContainers technology. To ensure that this technology works correctly, you need to configure the headers of your web server to ensure the site is cross-origin isolated (you can read more about this at [webcontainers.io](https://webcontainers.io/guides/configuring-headers)).
+The preview and terminal features in TutorialKit rely on the OpenVessel runtime. To ensure that it works correctly, you need to configure the headers of your web server to ensure the site is cross-origin isolated (you can read more about this at [OpenVessel](https://github.com/kobesoft-labs/openvessel#deployment)).
+
+The build also emits the runtime and the preview assets under `/ov/runtime/` and `/ov/preview/`, which have to be served from the same origin as the tutorial.
 
 To do that it is required that the tutorial page is server with the following headers:
 

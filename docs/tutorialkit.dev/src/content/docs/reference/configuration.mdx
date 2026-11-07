@@ -56,19 +56,19 @@ type I18nText = {
   editPageText?: string,
 
   /**
-   * Text of the WebContainer link.
+   * Text of the lesson runtime link.
    *
-   * @default 'Powered by WebContainers'
+   * @default 'Powered by OpenVessel'
    */
-  webcontainerLinkText?: string,
+  runtimeLinkText?: string,
 
   /**
-   * Text shown on the call to action button to start webcontainer when boot was blocked
-   * due to memory restrictions.
+   * Text shown on the call to action button to start the lesson runtime when the boot was blocked
+   * because of memory restrictions.
    *
-   * @default 'Start WebContainer'
+   * @default 'Run this tutorial'
    */
-  startWebContainerText?: string,
+  startRuntimeText?: string,
 
   /**
    * Text shown in the preview section when there are no steps to run and no preview to show.
@@ -278,7 +278,7 @@ type Command = string
 ```
 
 ##### `filesystem`
-Configures how changes such as files being modified or added in WebContainer should be reflected in the editor when they weren't caused by the user directly. By default, the editor will not reflect these changes.
+Configures how changes such as files being modified or added in the lesson runtime should be reflected in the editor when they weren't caused by the user directly. By default, the editor will not reflect these changes.
 
 An example use case is when a user runs a command that modifies a file. For instance when a `package.json` is modified by doing an `npm install <xyz>`. If `watch` is set to `true`, the file will be updated in the editor. If set to `false`, the file will not be updated.
 

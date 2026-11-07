@@ -158,7 +158,7 @@ Fix <code>counter.js</code> and run the tests!
 
 In this example we'll use the Tutorial Core APIs to congratulate user when they solve the lesson code.
 
-Every time user edits the `math.js`, we run `node check-lesson.js` in the webcontainer and see if the process exits with non-erroneous exit code.
+Every time user edits the `math.js`, we run `node check-lesson.js` in the lesson runtime and see if the process exits with non-erroneous exit code.
 Once the exit code indicates success, we inform user with message.
 
 <a class="my-4 inline-block" href="https://stackblitz.com/edit/stackblitz-starters-b9ie5x?file=src/components/LessonChecker.tsx&file=src/templates/default/check-lesson.mjs&file=src/content/tutorial/1-basics/1-introduction/1-welcome/content.mdx">
@@ -171,7 +171,7 @@ Once the exit code indicates success, we inform user with message.
 ```tsx title="src/components/LessonChecker.tsx"
 import { Dialog } from '@tutorialkit/react';
 import { useEffect, useState } from 'react';
-import { webcontainer } from 'tutorialkit:core';
+import { runtime } from 'tutorialkit:core';
 import tutorialStore from 'tutorialkit:store';
 
 export default function LessonChecker() {
@@ -209,8 +209,7 @@ export default function LessonChecker() {
 }
 
 async function checkLesson(): Promise<boolean> {
-  const webcontainerInstance = await webcontainer;
-  const process = await webcontainerInstance.spawn('node', ['./check-lesson.mjs']);
+  const process = await runtime.spawn('node', ['./check-lesson.mjs']);
 
   const exitCode = await process.exit;
 

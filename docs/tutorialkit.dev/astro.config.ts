@@ -1,5 +1,6 @@
 import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
+import { vesselAssets } from '@tutorialkit/astro';
 import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 import UnoCSS from 'unocss/astro';
@@ -17,6 +18,7 @@ export default defineConfig({
     ssr: {
       noExternal: '@tutorialkit/react',
     },
+    plugins: [vesselAssets],
   },
   integrations: [
     react(),

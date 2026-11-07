@@ -1,11 +1,10 @@
 import type { EditorDocument, EditorUpdate, ScrollPosition } from '@tutorialkit/react/core';
 import CodeMirrorEditor from '@tutorialkit/react/core/CodeMirrorEditor';
 import FileTree from '@tutorialkit/react/core/FileTree';
-import type { FileSystemTree, DirectoryNode } from '@webcontainer/api';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { Suspense, lazy, useEffect, useState } from 'react';
+import { useLessonRuntime } from './hooks/useLessonRuntime';
 import { useTheme } from './hooks/useTheme';
-import { useWebContainer } from './hooks/useWebcontainer';
 
 const Terminal = lazy(() => import('@tutorialkit/react/core/Terminal'));
 
@@ -61,7 +60,7 @@ export default function ExampleSimpleEditor() {
 }
 
 function useSimpleEditor() {
-  const webcontainerPromise = useWebContainer();
+  const runtime = useLessonRuntime();
   const [terminal, setTerminal] = useState<XTerm | null>(null);
   const [selectedFile, setSelectedFile] = useState('/src/index.js');
   const [documents, setDocuments] = useState<Record<string, EditorDocument>>(FILES);
@@ -78,9 +77,7 @@ function useSimpleEditor() {
       },
     }));
 
-    const webcontainer = await webcontainerPromise;
-
-    await webcontainer.fs.writeFile(selectedFile, content);
+    await runtime.writeFile(selectedFile, content);
   }
 
   function onScroll(scroll: ScrollPosition) {
@@ -95,13 +92,11 @@ function useSimpleEditor() {
 
   useEffect(() => {
     (async () => {
-      const webcontainer = await webcontainerPromise;
-
-      webcontainer.on('server-ready', (_port, url) => {
-        setPreviewSrc(url);
+      runtime.onServer(({ port }) => {
+        void runtime.previewUrl(port).then(setPreviewSrc);
       });
 
-      await webcontainer.mount(toFileTree(FILES));
+      await runtime.mount(Object.fromEntries(Object.entries(FILES).map(([path, file]) => [path, file.value])));
     })();
   }, []);
 
@@ -113,51 +108,26 @@ function useSimpleEditor() {
     run(terminal);
 
     async function run(terminal: XTerm) {
-      const webcontainer = await webcontainerPromise;
-      const process = await webcontainer.spawn('jsh', ['--osc'], {
+      const process = await runtime.spawn('/bin/sh', [], {
         terminal: {
           cols: terminal.cols,
           rows: terminal.rows,
         },
       });
 
-      let isInteractive = false;
-      let resolveReady!: () => void;
-
-      const jshReady = new Promise<void>((resolve) => {
-        resolveReady = resolve;
-      });
-
-      process.output.pipeTo(
+      void process.output.pipeTo(
         new WritableStream({
           write(data) {
-            if (!isInteractive) {
-              const [, osc] = data.match(/\x1b\]654;([^\x07]+)\x07/) || [];
-
-              if (osc === 'interactive') {
-                // wait until we see the interactive OSC
-                isInteractive = true;
-
-                resolveReady();
-              }
-            }
-
             terminal.write(data);
           },
         }),
       );
 
-      const shellWriter = process.input.getWriter();
-
       terminal.onData((data) => {
-        if (isInteractive) {
-          shellWriter.write(data);
-        }
+        void process.write(data);
       });
 
-      await jshReady;
-
-      shellWriter.write('npm install && npm start\n');
+      void process.write('npm install && npm start\n');
     }
   }, [terminal]);
 
@@ -249,40 +219,4 @@ function minIndent(string: string) {
   }
 
   return match.reduce((acc, curr) => Math.min(acc, curr.length), Infinity);
-}
-
-export function toFileTree(files: Record<string, EditorDocument>): FileSystemTree {
-  const root: FileSystemTree = {};
-
-  for (const filePath in files) {
-    const segments = filePath.split('/').filter((segment) => segment);
-
-    let currentTree: FileSystemTree = root;
-
-    for (let i = 0; i < segments.length; ++i) {
-      const name = segments[i];
-
-      if (i === segments.length - 1) {
-        currentTree[name] = {
-          file: {
-            contents: files[filePath].value,
-          },
-        };
-      } else {
-        let folder = currentTree[name] as DirectoryNode;
-
-        if (!folder) {
-          folder = {
-            directory: {},
-          };
-
-          currentTree[name] = folder;
-        }
-
-        currentTree = folder.directory;
-      }
-    }
-  }
-
-  return root;
 }
