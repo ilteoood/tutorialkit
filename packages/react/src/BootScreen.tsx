@@ -10,7 +10,7 @@ interface Props {
 
 export function BootScreen({ className, tutorialStore }: Props) {
   const steps = useStore(tutorialStore.steps);
-  const { startWebContainerText, noPreviewNorStepsText } = tutorialStore.lesson?.data.i18n ?? {};
+  const { startRuntimeText, noPreviewNorStepsText } = tutorialStore.lesson?.data.i18n ?? {};
   const bootStatus = useStore(tutorialStore.bootStatus);
 
   // workaround to prevent the hydration error caused by bootStatus always being 'unknown' server-side
@@ -23,7 +23,7 @@ export function BootScreen({ className, tutorialStore }: Props) {
   return (
     <div className={classNames('flex-grow w-full flex justify-center items-center text-sm', className)}>
       {isClient && bootStatus === 'blocked' ? (
-        <Button onClick={() => tutorialStore.unblockBoot()}>{startWebContainerText}</Button>
+        <Button onClick={() => tutorialStore.unblockBoot()}>{startRuntimeText}</Button>
       ) : steps ? (
         <ul className="space-y-1">
           {steps.map((step, index) => (

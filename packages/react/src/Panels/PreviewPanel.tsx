@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import type { PreviewInfo, TutorialStore } from '@tutorialkit/runtime';
 import type { I18n } from '@tutorialkit/types';
-import { reloadPreview } from '@webcontainer/api/utils';
 import { createElement, forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { BootScreen } from '../BootScreen.js';
@@ -171,7 +170,7 @@ function Preview({ preview, iframe, previewCount, first, last, toggleTerminal, i
 
   function reload() {
     if (iframe.ref) {
-      reloadPreview(iframe.ref);
+      iframe.ref.src = iframe.ref.src;
     }
   }
 
