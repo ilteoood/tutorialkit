@@ -93,11 +93,7 @@ export default function createPlugin({
           vite: {
             optimizeDeps: {
               entries: ['!**/src/(content|templates)/**'],
-              include: process.env.TUTORIALKIT_DEV
-                ? []
-                : [
-                    '@tutorialkit/react'
-                  ],
+              include: process.env.TUTORIALKIT_DEV ? [] : ['@tutorialkit/react'],
             },
             define: {
               __TK_NETWORK: network ? JSON.stringify(network) : 'undefined',
